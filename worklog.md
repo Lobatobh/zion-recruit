@@ -1495,3 +1495,38 @@ Stage Summary:
 - Portal 100% pt-BR com design premium usando shadcn/ui + framer-motion + Tailwind
 - 0 erros de lint nos novos arquivos
 - Build de produção compilou com sucesso
+
+---
+Task ID: 10 - candidate-portal-access
+Agent: Main Agent
+Task: Implement candidate portal invitation feature - allow recruiters to share portal access with candidates so they can track their recruitment process status
+
+Work Log:
+- Analyzed existing portal system (7 frontend components, 7 API routes already built)
+- Identified missing piece: no admin-side UI to invite candidates to portal
+- Created `/api/candidates/[id]/portal/route.ts` - GET (check existing token) + POST (generate new token)
+- Token: 32-byte hex via crypto.randomBytes, 7-day expiry, stored in CandidatePortalAccess table
+- Optional email sending via Resend credentials lookup (dynamic import)
+- Created `src/components/candidates/share-portal-dialog.tsx` - comprehensive dialog with:
+  - Explanation of what candidates can see (6 feature items)
+  - Active token status display with expiry date and last access
+  - URL input with copy-to-clipboard button
+  - Quick share buttons: Copy Link + WhatsApp (pre-formatted message)
+  - Generate New Link / Send via Email actions
+  - Open Portal preview button
+  - Security notice (7-day expiry, intransferable)
+- Integrated into `candidate-profile-panel.tsx`:
+  - Added import for SharePortalDialog
+  - Added isPortalDialogOpen state
+  - Added "Portal do Candidato" to dropdown menu (3-dot menu)
+  - Added green "Portal" button to quick actions bar
+  - Rendered SharePortalDialog with candidate props
+
+Stage Summary:
+- Candidates can now see their process status via the Portal do Candidato
+- Recruiters can share portal access via: copy link, WhatsApp, or email
+- Portal shows: pipeline stepper, stage history, interviews, DISC tests, messages, profile
+- Files created/modified:
+  - src/app/api/candidates/[id]/portal/route.ts (NEW - admin portal API)
+  - src/components/candidates/share-portal-dialog.tsx (NEW - portal sharing dialog)
+  - src/components/candidates/candidate-profile-panel.tsx (MODIFIED - portal button integration)

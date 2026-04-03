@@ -60,6 +60,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CandidateForm } from "./candidate-form";
+import { SharePortalDialog } from "./share-portal-dialog";
 import {
   Sheet,
   SheetContent,
@@ -291,6 +292,7 @@ export function CandidateProfilePanel({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [isPortalDialogOpen, setIsPortalDialogOpen] = useState(false);
 
   // Handle save profile edit
   const handleSaveEdit = async (data: any) => {
@@ -507,6 +509,10 @@ Contato: ${candidate.email}${candidate.phone ? ` | ${candidate.phone}` : ""}`;
                       <Share2 className="h-4 w-4 mr-2" />
                       Compartilhar
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsPortalDialogOpen(true)}>
+                      <Globe className="h-4 w-4 mr-2" />
+                      Portal do Candidato
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-destructive">
                       <XCircle className="h-4 w-4 mr-2" />
@@ -604,6 +610,14 @@ Contato: ${candidate.email}${candidate.phone ? ` | ${candidate.phone}` : ""}`;
                   <Share2 className="h-4 w-4 mr-1" />
                 )}
                 {shareCopied ? "Copiado!" : "Compartilhar"}
+              </Button>
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                onClick={() => setIsPortalDialogOpen(true)}
+              >
+                <Globe className="h-4 w-4 mr-1" />
+                Portal
               </Button>
             </div>
           </div>
@@ -1312,6 +1326,17 @@ Contato: ${candidate.email}${candidate.phone ? ` | ${candidate.phone}` : ""}`;
         </Button>
         <Content />
       </DialogContent>
+
+      {/* Portal Share Dialog */}
+      {candidate && (
+        <SharePortalDialog
+          open={isPortalDialogOpen}
+          onOpenChange={setIsPortalDialogOpen}
+          candidateId={candidate.id}
+          candidateName={candidate.name}
+          candidateEmail={candidate.email}
+        />
+      )}
     </Dialog>
   );
 }
