@@ -1761,3 +1761,24 @@ Stage Summary:
   - src/lib/agents/task-worker.ts (NEW - task processor)
   - src/app/api/agents/route.ts (connected worker to POST)
   - src/app/api/credentials/route.ts (added cache invalidation to POST)
+
+---
+Task ID: fix-client-create-bug
+Agent: Main Agent
+Task: Fix "Já existe um cliente com este nome" error when creating a company
+
+Work Log:
+- Investigated the error message in POST /api/clients handler
+- Found 1 inactive client in DB: "J & L CONSULTORIA E REPRESENTACAO LTDA" (isActive: false)
+- Root cause: Slug uniqueness check did not filter by isActive=true, so soft-deleted clients blocked new creation
+- Also found CNPJ uniqueness check had the same issue
+- Fixed slug check to only consider active clients (isActive: true)
+- Added slug suffix generation for collisions with inactive clients
+- Fixed CNPJ check to only consider active clients
+- Updated db.client.create to use finalSlug instead of slug
+- Rebuilt and restarted production server
+
+Stage Summary:
+- Bug: Soft-deleted (isActive=false) clients blocked creating new clients with same name/CNPJ
+- Fix: Added isActive: true filter to both slug and CNPJ uniqueness checks
+- Files changed: src/app/api/clients/route.ts

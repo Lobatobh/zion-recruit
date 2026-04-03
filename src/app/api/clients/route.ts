@@ -192,11 +192,12 @@ export async function POST(request: NextRequest) {
 
     const slug = generateSlug(name.trim());
 
-    // Check slug uniqueness
+    // Check slug uniqueness — only among active clients
     const existing = await db.client.findFirst({
       where: {
         tenantId: session.user.tenantId,
         slug,
+        isActive: true,
       },
     });
 
@@ -205,6 +206,26 @@ export async function POST(request: NextRequest) {
         { error: 'Já existe um cliente com este nome' },
         { status: 409 }
       );
+    }
+
+    // If slug collides with an inactive client, append a suffix to make it unique
+    const inactiveCollision = await db.client.findFirst({
+      where: {
+        tenantId: session.user.tenantId,
+        slug,
+        isActive: false,
+      },
+    });
+
+    let finalSlug = slug;
+    if (inactiveCollision) {
+      let counter = 1;
+      let candidate = `${slug}-${counter}`;
+      while (await db.client.findFirst({ where: { tenantId: session.user.tenantId, slug: candidate } })) {
+        counter++;
+        candidate = `${slug}-${counter}`;
+      }
+      finalSlug = candidate;
     }
 
     // Parse notifyEvents if it's an array
@@ -222,10 +243,10 @@ export async function POST(request: NextRequest) {
       if (normalizedCnpj.length !== 14) normalizedCnpj = null;
     }
 
-    // Check CNPJ uniqueness (global unique constraint)
+    // Check CNPJ uniqueness (global unique constraint) — only among active clients
     if (normalizedCnpj) {
       const cnpjExists = await db.client.findFirst({
-        where: { cnpj: normalizedCnpj },
+        where: { cnpj: normalizedCnpj, isActive: true },
       });
       if (cnpjExists) {
         return NextResponse.json(
@@ -239,7 +260,7 @@ export async function POST(request: NextRequest) {
       data: {
         tenantId: session.user.tenantId,
         name: name.trim(),
-        slug,
+        slug: finalSlug,
         logo: logo || null,
         cnpj: normalizedCnpj,
         tradeName: tradeName || null,
