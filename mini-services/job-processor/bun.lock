@@ -1,0 +1,18 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "job-processor-service",
+      "dependencies": {
+        "@prisma/client": "6.19.2",
+        "z-ai-web-dev-sdk": "latest",
+      },
+    },
+  },
+  "packages": {
+    "@prisma/client": ["@prisma/client@6.19.2", "", { "peerDependencies": { "prisma": "*", "typescript": ">=5.1.0" }, "optionalPeers": ["prisma", "typescript"] }, "sha512-gR2EMvfK/aTxsuooaDA32D8v+us/8AAet+C3J1cc04SW35FPdZYgLF+iN4NDLUgAaUGTKdAB0CYenu1TAgGdMg=="],
+
+    "z-ai-web-dev-sdk": ["z-ai-web-dev-sdk@0.0.17", "", { "bin": { "z-ai": "dist/cli.js", "z-ai-generate": "dist/cli.js" } }, "sha512-K86s7ixHpqIM5D3wmxlGKR9Kp6QnBYn0K9TcE7YGr84kejR7utpBixJlQlkwAdqML5pfhOCNixTb2trhHIeUbg=="],
+  }
+}

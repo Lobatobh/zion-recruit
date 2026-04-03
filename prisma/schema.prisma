@@ -1,0 +1,1667 @@
+// Zion Recruit - AI-Powered Recruitment SaaS
+// Part of Zion Assessment Ecosystem
+// Version: 2.0 - AI Agents Architecture
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// TENANCY & AUTHENTICATION
+// ============================================
+
+model Tenant {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  logo            String?
+  plan            Plan     @default(FREE)
+  maxJobs         Int      @default(10)
+  maxMembers      Int      @default(5)
+  maxCandidates   Int      @default(500)
+  
+  // Stripe
+  stripeCustomerId String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members          TenantMember[]
+  jobs             Job[]
+  candidates       Candidate[]
+  pipelineStages   PipelineStage[]
+  aiAgents         AIAgent[]
+  aiTasks          AITask[]
+  discTests        DISCTest[]
+  messageChannels  MessageChannel[]
+  conversations    Conversation[]
+  messageTemplates MessageTemplate[]
+  interviews       Interview[]
+  apiCredentials   ApiCredential[]
+  apiUsageLogs     ApiUsageLog[]
+  apiAlerts        ApiAlert[]
+  notifications    Notification[]
+  subscription     Subscription?
+  webhooks         Webhook[]
+  auditLogs        AuditLog[]
+  clients          Client[]
+  trackingEvents   TrackingEvent[]
+  trackingNotifs   TrackingNotification[]
+
+  @@map("tenants")
+}
+
+model TenantMember {
+  id             String     @id @default(cuid())
+  tenantId       String
+  userId         String
+  role           MemberRole @default(RECRUITER)
+  joinedAt       DateTime   @default(now())
+  
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@map("tenant_members")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String?
+  image         String?
+  password      String?
+  emailVerified DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  memberships   TenantMember[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// AI AGENTS SYSTEM
+// ============================================
+
+model AIAgent {
+  id               String      @id @default(cuid())
+  tenantId         String
+  
+  type             AgentType
+  name             String
+  description      String?
+  
+  config           String?
+  prompts          String?
+  model            String?     @default("gpt-4o-mini")
+  maxTokens        Int?        @default(2000)
+  temperature      Float?      @default(0.3)
+  
+  status           AgentStatus @default(IDLE)
+  lastRunAt        DateTime?
+  nextRunAt        DateTime?
+  
+  totalRuns        Int         @default(0)
+  successCount     Int         @default(0)
+  errorCount       Int         @default(0)
+  totalTokensUsed  Int         @default(0)
+  
+  schedule         String?
+  enabled          Boolean     @default(true)
+  autoRun          Boolean     @default(false)
+  
+  lastError        String?
+  lastErrorAt      DateTime?
+  
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tasks            AITask[]
+
+  @@unique([tenantId, type])
+  @@map("ai_agents")
+}
+
+model AITask {
+  id              String      @id @default(cuid())
+  tenantId        String
+  agentId         String
+  
+  type            String
+  status          TaskStatus  @default(PENDING)
+  priority        Int         @default(5)
+  
+  input           String
+  output          String?
+  error           String?
+  
+  startedAt       DateTime?
+  completedAt     DateTime?
+  duration        Int?
+  
+  tokensUsed      Int?
+  modelUsed       String?
+  
+  jobId           String?
+  candidateId     String?
+  
+  attempts        Int         @default(0)
+  maxAttempts     Int         @default(3)
+  
+  requiresReview  Boolean     @default(false)
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agent           AIAgent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([status, priority])
+  @@map("ai_tasks")
+}
+
+// ============================================
+// JOBS & RECRUITMENT
+// ============================================
+
+model Job {
+  id                  String        @id @default(cuid())
+  tenantId            String
+  
+  title               String
+  slug                String
+  department          String?
+  description         String
+  requirements        String
+  benefits            String?
+  
+  type                JobType       @default(FULL_TIME)
+  contractType        ContractType? @default(CLT)
+  workModel           WorkModel?    @default(REMOTE)
+  
+  location            String?
+  city                String?
+  state               String?
+  country             String?       @default("Brasil")
+  remote              Boolean       @default(false)
+  
+  salaryMin           Int?
+  salaryMax           Int?
+  salaryType          SalaryType?   @default(MONTHLY)
+  currency            String        @default("BRL")
+  
+  aiParsedSkills      String?
+  aiParsedKeywords    String?
+  aiParsedSeniority   String?
+  aiSummary           String?
+  
+  discProfileRequired String?
+  
+  status              JobStatus     @default(DRAFT)
+  publishedAt         DateTime?
+  expiresAt           DateTime?
+  
+  // Public job board fields
+  isPublic            Boolean       @default(false)
+  publicSlug          String?       @unique  // SEO-friendly URL for public job board
+  
+  viewsCount          Int           @default(0)
+  applicationsCount   Int           @default(0)
+  
+  sourcingEnabled     Boolean       @default(false)
+  sourcingLastRun     DateTime?
+  
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  clientId            String?
+  
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client              Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  candidates          Candidate[]
+  conversations       Conversation[]
+  interviews          Interview[]
+  trackingEvents      TrackingEvent[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  @@map("jobs")
+}
+
+model Candidate {
+  id                  String          @id @default(cuid())
+  tenantId            String
+  jobId               String?
+  pipelineStageId     String?
+  
+  name                String
+  email               String
+  phone               String?
+  
+  linkedin            String?
+  github              String?
+  portfolio           String?
+  
+  resumeUrl           String?
+  resumeText          String?
+  photo               String?
+  
+  parsedSkills        String?
+  parsedExperience    String?
+  parsedEducation     String?
+  aiSummary           String?
+  
+  city                String?
+  state               String?
+  country             String?         @default("Brasil")
+  
+  matchScore          Int?
+  matchDetails        String?
+  skillsScore         Int?
+  experienceScore     Int?
+  
+  source              String?
+  sourceUrl           String?
+  sourcedBy           String?
+  
+  status              CandidateStatus @default(SOURCED)
+  
+  contactedAt         DateTime?
+  respondedAt         DateTime?
+  responseStatus      ResponseStatus?
+  
+  interviewStatus     InterviewStatus?
+  interviewAt         DateTime?
+  interviewNotes      String?
+  
+  discTestSentAt      DateTime?
+  discTestCompletedAt DateTime?
+  
+  // Portal access
+  candidateToken      String?         @unique  // For portal access
+  
+  notes               Note[]
+  feedback            String?
+  rating              Int?
+  
+  tags                String?
+  
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job                 Job?            @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  pipelineStage       PipelineStage?  @relation(fields: [pipelineStageId], references: [id], onDelete: SetNull)
+  discTests           DISCTest[]
+  conversations       Conversation[]
+  interviews          Interview[]
+  trackingEvents      TrackingEvent[]
+  portalAccess        CandidatePortalAccess?
+
+  @@index([tenantId, jobId])
+  @@index([tenantId, status])
+  @@index([tenantId, email])
+  @@map("candidates")
+}
+
+// ============================================
+// CANDIDATE PORTAL ACCESS
+// ============================================
+
+model CandidatePortalAccess {
+  id              String    @id @default(cuid())
+  candidateId     String    @unique
+  
+  token           String    @unique  // Secure token for magic link auth
+  expiresAt       DateTime
+  lastAccessAt    DateTime?
+  isActive        Boolean   @default(true)
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([candidateId])
+  @@map("candidate_portal_access")
+}
+
+model PipelineStage {
+  id              String      @id @default(cuid())
+  tenantId        String
+  name            String
+  order           Int
+  color           String      @default("#6B7280")
+  isDefault       Boolean     @default(false)
+  isHired         Boolean     @default(false)
+  isRejected      Boolean     @default(false)
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidates      Candidate[]
+
+  @@unique([tenantId, name])
+  @@map("pipeline_stages")
+}
+
+model Note {
+  id          String   @id @default(cuid())
+  candidateId String
+  content     String
+  type        NoteType @default(GENERAL)
+  isPrivate   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+// ============================================
+// INTERVIEWS SYSTEM
+// ============================================
+
+model Interview {
+  id              String            @id @default(cuid())
+  tenantId        String
+  candidateId     String
+  jobId           String
+  
+  // Interview Details
+  title           String
+  type            InterviewType     @default(SCREENING)
+  description     String?
+  
+  // Scheduling
+  scheduledAt     DateTime
+  duration        Int               @default(60) // in minutes
+  timezone        String            @default("America/Sao_Paulo")
+  location        String?           // Physical location
+  meetingUrl      String?           // Video call URL
+  meetingProvider String?           // zoom, meet, teams, etc.
+  
+  // Status
+  status          InterviewStatus   @default(SCHEDULED)
+  confirmedAt     DateTime?
+  confirmedBy     String?           // User ID who confirmed
+  cancelledAt     DateTime?
+  cancelledBy     String?           // User ID who cancelled
+  cancelReason    String?
+  completedAt     DateTime?
+  noShowAt        DateTime?
+  
+  // Assignment
+  interviewerId   String?           // User ID of interviewer
+  interviewerName String?           // Denormalized for display
+  
+  // AI Generated
+  scheduledByAI   Boolean           @default(false)
+  aiAgentId       String?           // Agent that scheduled
+  
+  // Feedback & Evaluation
+  feedback        String?
+  rating          Int?              // 1-5 stars
+  recommendation  String?           // hire, no_hire, maybe
+  strengths       String?           // JSON array
+  weaknesses      String?           // JSON array
+  followUpNotes   String?
+  
+  // Reminders
+  reminderSentAt  DateTime?
+  reminderType    String?           // email, whatsapp, both
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidate       Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job             Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, scheduledAt])
+  @@index([tenantId, status])
+  @@index([candidateId])
+  @@index([jobId])
+  @@index([interviewerId])
+  @@map("interviews")
+}
+
+// ============================================
+// DISC ASSESSMENT SYSTEM
+// ============================================
+
+model DISCTest {
+  id                String        @id @default(cuid())
+  tenantId          String
+  candidateId       String
+  
+  status            DISCStatus    @default(PENDING)
+  sentAt            DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  
+  profileD          Int?
+  profileI          Int?
+  profileS          Int?
+  profileC          Int?
+  
+  primaryProfile    String?
+  secondaryProfile  String?
+  profileCombo      String?
+  
+  graphI            String?
+  graphII           String?
+  graphIII          String?
+  
+  aiAnalysis        String?
+  aiStrengths       String?
+  aiWeaknesses      String?
+  aiWorkStyle       String?
+  
+  jobFitScore       Int?
+  jobFitDetails     String?
+  
+  answers           DISCAnswer[]
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidate         Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId])
+  @@map("disc_tests")
+}
+
+// ============================================
+// CLIENT COMPANY TRACKING SYSTEM
+// ============================================
+
+model Client {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
+  logo        String?
+
+  // CNPJ & Corporate data (from BrasilAPI)
+  cnpj            String?   @unique
+  tradeName       String?
+  legalNature     String?
+  foundingDate    String?
+  companySize     String?
+  shareCapital    String?
+  registration    String?   // Inscrição Estadual
+  companyEmail    String?
+  companyPhone    String?
+  mainActivity    String?
+  status          String?   // Situação cadastral
+
+  // Address (from CEP lookup)
+  cep             String?
+  street          String?
+  number          String?
+  complement      String?
+  neighborhood    String?
+  city            String?
+  state           String?
+  address         String?
+
+  // Extra info
+  industry     String?
+  website      String?
+  notes        String?
+
+  // Primary contact (manual)
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+
+  // Notification preferences
+  notifyEmail      Boolean          @default(false)
+  notifyWhatsapp   Boolean          @default(false)
+  notifyFrequency  NotifyFrequency  @default(IMMEDIATE)
+  notifyEvents     String           @default("[]") // JSON array of TrackingEventType
+  aiTone           String           @default("professional") // professional, casual, formal
+
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobs         Job[]
+  contacts     ClientContact[]
+  events       TrackingEvent[]
+  notifications TrackingNotification[]
+
+  @@unique([tenantId, slug])
+  @@map("clients")
+}
+
+model ClientContact {
+  id          String   @id @default(cuid())
+  clientId    String
+  name        String
+  email       String?
+  phone       String?
+  role        String?
+  isPrimary   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  notifications TrackingNotification[]
+
+  @@map("client_contacts")
+}
+
+model TrackingEvent {
+  id          String             @id @default(cuid())
+  tenantId    String
+  clientId    String
+  jobId       String?
+  candidateId String?
+  
+  type        TrackingEventType
+  title       String
+  description String?
+  metadata    String?
+  
+  isRead      Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client       Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  job          Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  candidate    Candidate?          @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  notifications TrackingNotification[]
+
+  @@index([tenantId, clientId, createdAt])
+  @@map("tracking_events")
+}
+
+model TrackingNotification {
+  id          String               @id @default(cuid())
+  tenantId    String
+  clientId    String
+  eventId     String
+  contactId   String?
+  
+  channel     NotifyChannel        @default(EMAIL)
+  status      TrackingNotifStatus  @default(PENDING)
+  
+  message     String
+  subject     String?
+  aiGenerated Boolean              @default(true)
+  
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  error       String?
+  
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client       Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  event        TrackingEvent       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contact      ClientContact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, clientId, createdAt])
+  @@map("tracking_notifications")
+}
+
+model DISCAnswer {
+  id              String   @id @default(cuid())
+  testId          String
+  questionNumber  Int
+  
+  mostOption      String
+  leastOption     String
+  
+  createdAt       DateTime @default(now())
+
+  test            DISCTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, questionNumber])
+  @@map("disc_answers")
+}
+
+// ============================================
+// AI CACHE (for caching parsed resumes, match scores, etc.)
+// ============================================
+
+model AICache {
+  id         String   @id @default(cuid())
+  cacheKey   String   @unique
+  cacheType  String   // resume_parse, match_score, summary
+  tenantId   String
+  inputData  String
+  outputData String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId, cacheType])
+  @@index([expiresAt])
+  @@map("ai_cache")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Plan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  RECRUITER
+  VIEWER
+}
+
+enum AgentType {
+  JOB_PARSER
+  SOURCING
+  SCREENING
+  CONTACT
+  SCHEDULER
+  DISC_ANALYZER
+  MATCHING
+  REPORT
+  ORCHESTRATOR
+}
+
+enum AgentStatus {
+  IDLE
+  RUNNING
+  PAUSED
+  ERROR
+  DISABLED
+}
+
+enum TaskStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  RETRY
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+enum ContractType {
+  CLT
+  PJ
+  CONTRACTOR
+  INTERNSHIP
+}
+
+enum WorkModel {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum SalaryType {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  CLOSED
+  ARCHIVED
+}
+
+enum CandidateStatus {
+  SOURCED
+  APPLIED
+  SCREENING
+  INTERVIEWING
+  DISC_TEST
+  OFFERED
+  HIRED
+  REJECTED
+  WITHDRAWN
+  NO_RESPONSE
+}
+
+enum ResponseStatus {
+  INTERESTED
+  NOT_INTERESTED
+  NO_RESPONSE
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum InterviewType {
+  SCREENING
+  TECHNICAL
+  BEHAVIORAL
+  CULTURAL
+  FINAL
+  PHONE
+  VIDEO
+  ONSITE
+}
+
+enum NoteType {
+  GENERAL
+  INTERVIEW
+  FEEDBACK
+  AI_INSIGHT
+}
+
+enum DISCStatus {
+  PENDING
+  SENT
+  STARTED
+  COMPLETED
+  EXPIRED
+}
+
+// ============================================
+// CLIENT TRACKING ENUMS
+// ============================================
+
+enum NotifyFrequency {
+  IMMEDIATE
+  DAILY_DIGEST
+  WEEKLY_DIGEST
+}
+
+enum NotifyChannel {
+  EMAIL
+  WHATSAPP
+  BOTH
+}
+
+enum TrackingEventType {
+  CANDIDATE_NEW
+  CANDIDATE_SCREENING
+  CANDIDATE_INTERVIEW
+  CANDIDATE_OFFER
+  CANDIDATE_HIRED
+  CANDIDATE_REJECTED
+  CANDIDATE_WITHDRAWN
+  INTERVIEW_SCHEDULED
+  INTERVIEW_COMPLETED
+  INTERVIEW_CANCELLED
+  INTERVIEW_NO_SHOW
+  DISC_TEST_SENT
+  DISC_TEST_COMPLETED
+  DISC_PROFILE_READY
+  JOB_PUBLISHED
+  JOB_CLOSED
+  JOB_PAUSED
+  WEEKLY_SUMMARY
+  MANUAL_UPDATE
+}
+
+enum TrackingNotifStatus {
+  PENDING
+  GENERATING
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// ============================================
+// MESSAGING OMNICHANNEL SYSTEM
+// ============================================
+
+model MessageChannel {
+  id           String   @id @default(cuid())
+  tenantId     String
+  type         ChannelType
+  name         String
+  config       String?
+  isActive     Boolean  @default(true)
+  instanceName String?
+  instanceId   String?
+  webhookUrl   String?
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([tenantId, type])
+  @@map("message_channels")
+}
+
+model Conversation {
+  id                String             @id @default(cuid())
+  tenantId          String
+  candidateId       String
+  jobId             String?
+  channelId         String?
+  channel           ChannelType        @default(CHAT)
+  externalId        String?
+  status            ConversationStatus @default(ACTIVE)
+  aiMode            Boolean            @default(true)
+  aiStage           String?
+  aiContext         String?
+  lastMessageAt     DateTime           @default(now())
+  lastMessagePreview String?
+  unreadCount       Int                @default(0)
+  unreadByCandidate Boolean            @default(false)
+  needsIntervention Boolean            @default(false)
+  interventionReason String?
+  collectedData     String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidate         Candidate          @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job               Job?               @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  channelConfig     MessageChannel?    @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  messages          Message[]
+  interventions     HumanIntervention[]
+
+  @@unique([tenantId, candidateId, channel])
+  @@index([tenantId, status])
+  @@index([tenantId, needsIntervention])
+  @@map("conversations")
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  senderType     SenderType
+  senderId       String?
+  senderName     String?
+  content        String
+  contentType    ContentType   @default(TEXT)
+  mediaUrl       String?
+  mediaType      String?
+  channel        ChannelType   @default(CHAT)
+  externalId     String?
+  status         MessageStatus @default(SENT)
+  isAiGenerated  Boolean       @default(false)
+  aiConfidence   Float?
+  needsReview    Boolean       @default(false)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNotes    String?
+  metadata       String?
+  sentAt         DateTime      @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, sentAt])
+  @@index([needsReview])
+  @@map("messages")
+}
+
+model HumanIntervention {
+  id              String   @id @default(cuid())
+  conversationId  String
+  triggeredAt     DateTime @default(now())
+  triggeredBy     String?
+  reason          String
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  resolutionNotes String?
+  createdAt       DateTime @default(now())
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, resolvedAt])
+  @@map("human_interventions")
+}
+
+model MessageTemplate {
+  id        String      @id @default(cuid())
+  tenantId  String
+  name      String
+  trigger   String
+  category  String
+  subject   String?
+  body      String
+  channel   ChannelType @default(CHAT)
+  variables String?
+  isActive  Boolean     @default(true)
+  isDefault Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, trigger, channel])
+  @@map("message_templates")
+}
+
+// ============================================
+// MESSAGING ENUMS
+// ============================================
+
+enum ChannelType {
+  CHAT
+  EMAIL
+  WHATSAPP
+  SMS
+  TELEGRAM
+}
+
+enum ConversationStatus {
+  ACTIVE
+  PENDING
+  SNOOZED
+  CLOSED
+  ARCHIVED
+}
+
+enum SenderType {
+  CANDIDATE
+  RECRUITER
+  AI
+  SYSTEM
+}
+
+enum ContentType {
+  TEXT
+  MARKDOWN
+  HTML
+  IMAGE
+  FILE
+  AUDIO
+  VIDEO
+  LOCATION
+  CONTACT
+}
+
+enum MessageStatus {
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// ============================================
+// API CREDENTIALS & USAGE TRACKING
+// ============================================
+
+model ApiCredential {
+  id                String           @id @default(cuid())
+  tenantId          String
+  
+  // Provider Info
+  provider          ApiProvider
+  name              String
+  description       String?
+  
+  // Credentials (encrypted)
+  apiKey            String           // Encrypted API key
+  apiSecret         String?          // Encrypted secret (if needed)
+  endpoint          String?          // Custom endpoint URL
+  organizationId    String?          // For OpenAI organization
+  
+  // Extra fields for different providers
+  projectUrl        String?          // Supabase project URL
+  projectKey        String?          // Supabase anon/service key
+  region            String?          // AWS region, Cloud region
+  accountId         String?          // Account ID (AWS, Azure, etc.)
+  instanceName      String?          // Evolution API instance name
+  webhookUrl        String?          // Webhook URL for callbacks
+  
+  // Configuration
+  defaultModel      String?
+  maxTokensPerCall  Int?
+  temperature       Float?
+  
+  // Status
+  isActive          Boolean          @default(true)
+  isDefault         Boolean          @default(false)
+  lastUsedAt        DateTime?
+  lastErrorAt       DateTime?
+  lastError         String?
+  
+  // Usage Limits & Alerts
+  monthlyLimit      Int?             // Max tokens/calls per month
+  alertThreshold    Int?             // Percentage to trigger alert (e.g., 80)
+  currentUsage      Int              @default(0)
+  usageResetAt      DateTime?
+  
+  // Timestamps
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  // Relations
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usageLogs         ApiUsageLog[]
+  alerts            ApiAlert[]
+  
+  @@unique([tenantId, provider, name])
+  @@index([tenantId, provider])
+  @@index([tenantId, isActive])
+  @@map("api_credentials")
+}
+
+model ApiUsageLog {
+  id                String           @id @default(cuid())
+  tenantId          String
+  credentialId      String
+  
+  // Request Info
+  requestType       String           // e.g., "chat_completion", "embedding", "transcription"
+  model             String
+  provider          ApiProvider
+  
+  // Tokens
+  promptTokens      Int              @default(0)
+  completionTokens  Int              @default(0)
+  totalTokens       Int              @default(0)
+  
+  // Cost (in USD, stored as cents to avoid floating point)
+  costCents         Int              @default(0)
+  
+  // Performance
+  durationMs        Int?             // Request duration in milliseconds
+  
+  // Status
+  status            ApiCallStatus
+  errorMessage      String?
+  
+  // Context
+  agentType         String?          // Which AI agent made the call
+  jobId             String?          // Related job (if any)
+  candidateId       String?          // Related candidate (if any)
+  taskId            String?          // Related AI task (if any)
+  
+  // Timestamps
+  createdAt         DateTime         @default(now())
+  
+  // Relations
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credential        ApiCredential    @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId, createdAt])
+  @@index([credentialId, createdAt])
+  @@index([provider, createdAt])
+  @@map("api_usage_logs")
+}
+
+model ApiAlert {
+  id                String           @id @default(cuid())
+  tenantId          String
+  credentialId      String
+  
+  // Alert Info
+  type              ApiAlertType
+  severity          ApiAlertSeverity
+  message           String
+  
+  // Threshold Info
+  thresholdValue    Int?             // The threshold that was crossed
+  currentValue      Int?             // The current value
+  
+  // Status
+  isRead            Boolean          @default(false)
+  readAt            DateTime?
+  readBy            String?          // User ID who read it
+  isResolved        Boolean          @default(false)
+  resolvedAt        DateTime?
+  resolvedBy        String?          // User ID who resolved it
+  
+  // Timestamps
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  // Relations
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credential        ApiCredential    @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId, isRead])
+  @@index([tenantId, createdAt])
+  @@map("api_alerts")
+}
+
+// ============================================
+// NOTIFICATION SYSTEM
+// ============================================
+
+model Notification {
+  id          String             @id @default(cuid())
+  tenantId    String
+  userId      String?            // Null = notification for all tenant members
+  
+  // Notification Type & Category
+  type        NotificationType
+  category    NotificationCategory
+  priority    NotificationPriority @default(NORMAL)
+  
+  // Content
+  title       String
+  message     String
+  description String?            // Extended description (markdown supported)
+  
+  // Action Link
+  actionUrl   String?            // URL to navigate when clicked
+  actionLabel String?            // Label for the action button
+  
+  // Related Entity
+  entityType  String?            // e.g., "candidate", "job", "ai_task", "interview"
+  entityId    String?            // ID of the related entity
+  
+  // Status
+  isRead      Boolean            @default(false)
+  readAt      DateTime?
+  readBy      String?            // User ID who read it
+  
+  isArchived  Boolean            @default(false)
+  archivedAt  DateTime?
+  archivedBy  String?            // User ID who archived it
+  
+  isPinned    Boolean            @default(false)    // Pinned notifications stay at top
+  
+  // Delivery
+  deliveredEmail  Boolean        @default(false)
+  deliveredPush   Boolean        @default(false)
+  deliveredInApp  Boolean        @default(true)
+  
+  // Timestamps
+  expiresAt   DateTime?          // Optional expiration date
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  
+  // Relations
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([tenantId, isRead])
+  @@index([tenantId, createdAt])
+  @@index([userId, isRead])
+  @@index([category, createdAt])
+  @@index([entityType, entityId])
+  @@map("notifications")
+}
+
+// ============================================
+// NOTIFICATION ENUMS
+// ============================================
+
+enum NotificationType {
+  // System
+  SYSTEM_UPDATE
+  SYSTEM_MAINTENANCE
+  SYSTEM_ALERT
+  
+  // Candidates
+  CANDIDATE_NEW
+  CANDIDATE_STATUS_CHANGE
+  CANDIDATE_APPLIED
+  CANDIDATE_HIRED
+  CANDIDATE_REJECTED
+  
+  // Jobs
+  JOB_PUBLISHED
+  JOB_CLOSED
+  JOB_EXPIRING
+  
+  // Pipeline
+  PIPELINE_STAGE_CHANGE
+  PIPELINE_STUCK
+  
+  // AI Agents
+  AI_TASK_COMPLETED
+  AI_TASK_FAILED
+  AI_AGENT_ERROR
+  AI_SUGGESTION
+  
+  // Messages
+  MESSAGE_RECEIVED
+  MESSAGE_INTERVENTION
+  MESSAGE_FAILED
+  
+  // Interviews
+  INTERVIEW_SCHEDULED
+  INTERVIEW_REMINDER
+  INTERVIEW_CANCELLED
+  INTERVIEW_COMPLETED
+  INTERVIEW_NO_SHOW
+  
+  // DISC
+  DISC_TEST_SENT
+  DISC_TEST_COMPLETED
+  DISC_PROFILE_READY
+  
+  // API & Credentials
+  API_USAGE_ALERT
+  API_ERROR
+  API_LIMIT_REACHED
+  CREDENTIAL_EXPIRED
+  
+  // Team
+  TEAM_INVITE
+  TEAM_JOINED
+  TEAM_ROLE_CHANGE
+}
+
+enum NotificationCategory {
+  SYSTEM
+  CANDIDATES
+  JOBS
+  PIPELINE
+  AI_AGENTS
+  MESSAGES
+  INTERVIEWS
+  DISC
+  API
+  TEAM
+}
+
+enum NotificationPriority {
+  LOW       // Can wait
+  NORMAL    // Default
+  HIGH      // Needs attention soon
+  URGENT    // Needs immediate attention
+}
+
+// ============================================
+// API ENUMS
+// ============================================
+
+enum ApiProvider {
+  // AI Providers
+  OPENAI
+  GEMINI
+  OPENROUTER
+  ANTHROPIC
+
+  // Database & Storage
+  SUPABASE
+
+  // Communication
+  RESEND
+  SENDGRID
+  EVOLUTION
+  TWILIO
+
+  // Integrations
+  LINKEDIN
+  STRIPE
+
+  // Cloud Services
+  AWS
+  GOOGLE_CLOUD
+  AZURE
+}
+
+enum ApiCallStatus {
+  SUCCESS
+  ERROR
+  RATE_LIMITED
+  TIMEOUT
+}
+
+enum ApiAlertType {
+  USAGE_THRESHOLD
+  LIMIT_REACHED
+  API_ERROR
+  CREDENTIAL_EXPIRED
+  HIGH_COST
+}
+
+enum ApiAlertSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+// ============================================
+// BACKGROUND JOB QUEUE SYSTEM
+// ============================================
+
+model BackgroundJob {
+  id              String            @id @default(cuid())
+  tenantId        String?
+  
+  // Job Type & Classification
+  type            JobQueueType
+  name            String
+  description     String?
+  priority        JobPriority       @default(NORMAL)
+  
+  // Job Data
+  input           String            // JSON encoded input data
+  output          String?           // JSON encoded output data
+  error           String?           // Error message if failed
+  
+  // Scheduling
+  runAt           DateTime?         // Scheduled run time (null = immediate)
+  startedAt       DateTime?         // When processing started
+  completedAt     DateTime?         // When processing completed
+  
+  // Status & Progress
+  status          JobQueueStatus    @default(PENDING)
+  progress        Int               @default(0)  // 0-100 percentage
+  progressMessage String?
+  
+  // Retry Configuration
+  attempts        Int               @default(0)
+  maxAttempts     Int               @default(3)
+  lastAttemptAt   DateTime?
+  nextRetryAt     DateTime?
+  
+  // Timing
+  duration        Int?              // Duration in milliseconds
+  
+  // Context
+  createdBy       String?           // User ID who created the job
+  relatedType     String?           // e.g., "candidate", "job", "disc_test"
+  relatedId       String?           // ID of related entity
+  
+  // Result
+  result          String?           // JSON encoded result summary
+  
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Indexes
+  @@index([status, priority])
+  @@index([type, status])
+  @@index([runAt])
+  @@index([tenantId, status])
+  @@index([relatedType, relatedId])
+  @@map("background_jobs")
+}
+
+// ============================================
+// JOB QUEUE ENUMS
+// ============================================
+
+enum JobQueueType {
+  RESUME_PARSE
+  CANDIDATE_MATCH
+  BATCH_SCREENING
+  SEND_EMAIL
+  DISC_ANALYSIS
+  WEBHOOK_DISPATCH
+}
+
+enum JobPriority {
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum JobQueueStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  RETRY
+}
+
+// ============================================
+// STRIPE BILLING & SUBSCRIPTIONS
+// ============================================
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  tenantId              String             @unique
+  
+  // Stripe IDs
+  stripeCustomerId      String
+  stripeSubscriptionId  String             @unique
+  stripePriceId         String
+  stripeProductId       String?
+  
+  // Status
+  status                SubscriptionStatus @default(ACTIVE)
+  
+  // Billing Period
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean            @default(false)
+  canceledAt            DateTime?
+  
+  // Trial
+  trialStart            DateTime?
+  trialEnd              DateTime?
+  
+  // Plan Info (denormalized for quick access)
+  plan                  Plan
+  priceAmount           Int                // in cents
+  priceCurrency         String             @default("usd")
+  interval              String             // month, year
+  
+  // Timestamps
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  
+  // Relations
+  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([stripeCustomerId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ============================================
+// SUBSCRIPTION ENUMS
+// ============================================
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  UNPAID
+  PAUSED
+}
+
+// ============================================
+// AUDIT LOG SYSTEM
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String?
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, EXPORT, etc.
+  entityType  String   // Candidate, Job, User, etc.
+  entityId    String?
+  changes     String?  // JSON diff of changes
+  metadata    String?  // Additional context (IP, user agent, etc.)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// ============================================
+// AUDIT LOG ENUMS
+// ============================================
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  EXPORT
+  IMPORT
+  PERMISSION_CHANGE
+  SETTINGS_CHANGE
+  API_KEY_CREATED
+  API_KEY_REVOKED
+  AGENT_RUN
+  CANDIDATE_STAGE_CHANGE
+  JOB_PUBLISHED
+  JOB_CLOSED
+  INTERVIEW_SCHEDULED
+  INTERVIEW_CANCELLED
+  DISC_TEST_SENT
+  MESSAGE_SENT
+}
+
+enum AuditEntityType {
+  CANDIDATE
+  JOB
+  USER
+  TENANT
+  API_CREDENTIAL
+  AI_AGENT
+  AI_TASK
+  INTERVIEW
+  DISC_TEST
+  MESSAGE
+  CONVERSATION
+  PIPELINE_STAGE
+  NOTIFICATION
+  SUBSCRIPTION
+}
+
+// ============================================
+// WEBHOOKS SYSTEM
+// ============================================
+
+model Webhook {
+  id              String    @id @default(cuid())
+  tenantId        String
+  name            String
+  url             String
+  secret          String    // For signature verification (encrypted)
+  events          String    // JSON array of event types
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  lastStatus      String?
+  failureCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries      WebhookDelivery[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id          String    @id @default(cuid())
+  webhookId   String
+  eventType   String
+  payload     String    // JSON
+  statusCode  Int?
+  response    String?
+  deliveredAt DateTime?
+  attempts    Int       @default(0)
+  nextRetryAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@map("webhook_deliveries")
+}

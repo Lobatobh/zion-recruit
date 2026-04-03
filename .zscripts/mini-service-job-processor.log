@@ -1,0 +1,20 @@
+[job-processor] Installing dependencies...
+bun install v1.3.10 (30e609e0)
+
++ @prisma/client@6.19.2
++ z-ai-web-dev-sdk@0.0.17
+
+2 packages installed [2.38s]
+[job-processor] Running bun run dev...
+$ bun --hot index.ts
+38 | var clientVersion = version;
+39 | 
+40 | // src/scripts/default-index.ts
+41 | var PrismaClient = class {
+42 |   constructor() {
+43 |     throw new Error('@prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.');
+                   ^
+error: @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+      at new PrismaClient (/home/z/my-project/mini-services/job-processor/node_modules/.prisma/client/default.js:43:15)
+      at /home/z/my-project/mini-services/job-processor/index.ts:18:16
+      at loadAndEvaluateModule (2:1)
