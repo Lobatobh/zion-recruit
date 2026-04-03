@@ -8,3 +8,4 @@ $ bun --hot index.ts
 [2026-04-03T16:34:16.065Z] Keepalive service started on port 3001
 [2026-04-03T16:34:16.065Z] Pinging http://localhost:3000 every 10s
 [2026-04-03T16:34:16.070Z] Status endpoint: http://localhost:3001
+error: script "dev" was terminated by signal SIGKILL (Forced quit)
