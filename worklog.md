@@ -1597,3 +1597,27 @@ Stage Summary:
 - Client creation and editing should work without errors
 - Error messages from API are now properly displayed to users
 - CNPJ uniqueness is properly validated before database operations
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix AI Agents to properly use configured API credentials
+
+Work Log:
+- Investigated full AI Agents ↔ API Credentials integration
+- Found agents DO use credentials module via LLMService.ts, but with gaps
+- Added `credentialId` field to AIAgent Prisma model with relation to ApiCredential
+- Updated LLMService: added `credentialId` to LLMRequest, added `getCredentialById()`, updated `call()` to prioritize specified credential
+- Updated BaseAgent: added `credentialId` to AgentConfig and constructor
+- Updated Agent API (PUT /api/agents/[id]): added credentialId support
+- Updated AgentDetailDialog: added credential selector dropdown in Config tab with save functionality
+- Added cache invalidation: calls `llmService.clearCredentialCache()` on PUT, PATCH, DELETE of credentials
+- Enhanced trackUsage: now creates ApiUsageLog records with model, provider, token counts
+- Updated frontend types: added credentialId, credentialName to AIAgent interface
+
+Stage Summary:
+- AI agents can now be assigned specific API credentials per-agent
+- When an agent has a credentialId, it uses that credential first with auto-fallback
+- When no credentialId is set, agents use auto-selection (first valid default) as before
+- Credential cache is properly invalidated when credentials are updated or deleted
+- ApiUsageLog records are now created for detailed usage analytics
+- Remaining: Task queue worker for auto-execution (deferred - lower priority)

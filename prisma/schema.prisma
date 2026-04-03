@@ -162,6 +162,8 @@ model AIAgent {
   enabled          Boolean     @default(true)
   autoRun          Boolean     @default(false)
   
+  credentialId      String?
+  
   lastError        String?
   lastErrorAt      DateTime?
   
@@ -169,6 +171,7 @@ model AIAgent {
   updatedAt        DateTime    @updatedAt
 
   tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credential       ApiCredential?     @relation(fields: [credentialId], references: [id], onDelete: SetNull)
   tasks            AITask[]
 
   @@unique([tenantId, type])
@@ -1158,6 +1161,7 @@ model ApiCredential {
   tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   usageLogs         ApiUsageLog[]
   alerts            ApiAlert[]
+  aiAgents          AIAgent[]
   
   @@unique([tenantId, provider, name])
   @@index([tenantId, provider])

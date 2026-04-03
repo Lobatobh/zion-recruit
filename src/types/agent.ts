@@ -41,6 +41,8 @@ export interface AIAgent {
   lastErrorAt?: Date | null;
   autoRun: boolean;
   schedule?: string | null;
+  credentialId?: string | null;
+  credentialName?: string | null;  // denormalized for display
   tasksCount: number;
   createdAt?: Date | null;
   tasks?: AITask[];

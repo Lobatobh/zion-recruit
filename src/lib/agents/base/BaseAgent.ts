@@ -27,6 +27,7 @@ export interface AgentConfig {
   systemPrompt?: string;
   autoRun?: boolean;
   schedule?: string;
+  credentialId?: string;
 }
 
 export interface TaskInput {
@@ -60,6 +61,7 @@ export abstract class BaseAgent {
   
   protected tenantId: string;
   protected agentId: string | null = null;
+  protected credentialId: string | null = null;
   
   constructor(
     tenantId: string,
@@ -73,6 +75,7 @@ export abstract class BaseAgent {
     this.maxTokens = config.maxTokens || 2000;
     this.temperature = config.temperature || 0.3;
     this.systemPrompt = config.systemPrompt || '';
+    this.credentialId = config.credentialId || null;
   }
 
   // ============================================
@@ -102,6 +105,7 @@ export abstract class BaseAgent {
           temperature: this.temperature,
           prompts: JSON.stringify({ systemPrompt: this.systemPrompt }),
           status: AgentStatus.IDLE,
+          credentialId: this.credentialId,
         },
       });
     }

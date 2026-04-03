@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Bot,
@@ -15,6 +15,8 @@ import {
   Settings,
   Calendar,
   AlertTriangle,
+  Key,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -25,6 +27,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentTaskList, type AITask } from "./agent-task-list";
@@ -34,6 +43,7 @@ import {
   type AgentStatus,
   statusConfig,
 } from "@/types/agent";
+import { toast } from "sonner";
 
 interface AgentDetailDialogProps {
   agent: AIAgent | null;
@@ -41,6 +51,7 @@ interface AgentDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   onToggle?: (id: string, enabled: boolean) => void;
   onRun?: (id: string) => void;
+  onUpdated?: (agent: AIAgent) => void;
 }
 
 export function AgentDetailDialog({
@@ -49,12 +60,89 @@ export function AgentDetailDialog({
   onOpenChange,
   onToggle,
   onRun,
+  onUpdated,
 }: AgentDetailDialogProps) {
   const [activeTab, setActiveTab] = useState("overview");
+  const [selectedCredentialId, setSelectedCredentialId] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<Array<{ id: string; name: string; provider: string }>>([]);
+  const [credentialsLoading, setCredentialsLoading] = useState(false);
+  const [savingCredential, setSavingCredential] = useState(false);
+
+  // Fetch available credentials
+  const fetchCredentials = useCallback(async () => {
+    setCredentialsLoading(true);
+    try {
+      const res = await fetch("/api/credentials");
+      if (res.ok) {
+        const data = await res.json();
+        // Only show AI provider credentials
+        const aiProviders = ["OPENAI", "GEMINI", "OPENROUTER", "ANTHROPIC"];
+        const aiCreds = (data.credentials || data || []).filter(
+          (c: { provider: string }) => aiProviders.includes(c.provider)
+        );
+        setCredentials(aiCreds);
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setCredentialsLoading(false);
+    }
+  }, []);
+
+  // Initialize selectedCredentialId from agent
+  useEffect(() => {
+    if (agent) {
+      setSelectedCredentialId(agent.credentialId || null);
+    }
+  }, [agent]);
+
+  // Fetch credentials when config tab is opened
+  useEffect(() => {
+    if (open && activeTab === "config" && credentials.length === 0) {
+      fetchCredentials();
+    }
+  }, [open, activeTab, credentials.length, fetchCredentials]);
 
   if (!agent) return null;
 
   const statusInfo = statusConfig[agent.status];
+
+  const handleCredentialChange = async (value: string) => {
+    const newCredentialId = value === "auto" ? null : value;
+    setSelectedCredentialId(newCredentialId);
+
+    if (!agent) return;
+
+    setSavingCredential(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credentialId: newCredentialId }),
+      });
+
+      if (res.ok) {
+        toast.success("Credencial atualizada com sucesso");
+        const selectedCred = newCredentialId
+          ? credentials.find((c) => c.id === newCredentialId)
+          : null;
+        onUpdated?.({
+          ...agent,
+          credentialId: newCredentialId,
+          credentialName: selectedCred?.name || null,
+        });
+      } else {
+        toast.error("Erro ao atualizar credencial");
+        setSelectedCredentialId(agent.credentialId || null);
+      }
+    } catch {
+      toast.error("Erro ao atualizar credencial");
+      setSelectedCredentialId(agent.credentialId || null);
+    } finally {
+      setSavingCredential(false);
+    }
+  };
+
   const successRate =
     agent.totalRuns > 0
       ? Math.round((agent.successCount / agent.totalRuns) * 100)
@@ -299,6 +387,52 @@ export function AgentDetailDialog({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* API Credential */}
+              <div className="p-4 rounded-lg border border-border">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <Key className="h-4 w-4" />
+                  Credencial de API
+                  {savingCredential && (
+                    <Loader2 className="h-3 w-3 animate-spin ml-auto" />
+                  )}
+                </h4>
+                {credentialsLoading ? (
+                  <div className="h-10 bg-muted rounded-md animate-pulse" />
+                ) : (
+                  <Select
+                    value={selectedCredentialId || "auto"}
+                    onValueChange={handleCredentialChange}
+                    disabled={savingCredential}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar credencial" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        Automático (primeira disponível)
+                      </SelectItem>
+                      {credentials.map((cred) => (
+                        <SelectItem key={cred.id} value={cred.id}>
+                          {cred.name} ({cred.provider})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {selectedCredentialId && (
+                  <p className="text-xs text-emerald-600 mt-2">
+                    ✓ Usando: {credentials.find((c) => c.id === selectedCredentialId)?.name || selectedCredentialId}
+                  </p>
+                )}
+                {!selectedCredentialId && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Define qual credencial de API este agente deve usar. Se
+                    &quot;Automático&quot;, o sistema seleciona a primeira credencial
+                    válida disponível.
+                  </p>
+                )}
               </div>
 
               {/* Schedule Configuration */}

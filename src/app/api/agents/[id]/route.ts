@@ -30,6 +30,13 @@ export async function GET(
           take: 10,
           orderBy: { createdAt: "desc" },
         },
+        credential: {
+          select: {
+            id: true,
+            name: true,
+            provider: true,
+          },
+        },
         _count: {
           select: { tasks: true },
         },
@@ -121,7 +128,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { enabled, status, config, prompts, autoRun, schedule } = body;
+    const { enabled, status, config, prompts, autoRun, schedule, credentialId } = body;
 
     // Verify agent belongs to user's organization
     const existingAgent = await db.aIAgent.findFirst({
@@ -146,6 +153,7 @@ export async function PUT(
       prompts?: string;
       autoRun?: boolean;
       schedule?: string;
+      credentialId?: string | null;
     } = {};
 
     if (typeof enabled === "boolean") {
@@ -175,6 +183,10 @@ export async function PUT(
 
     if (schedule) {
       updateData.schedule = schedule;
+    }
+
+    if (credentialId !== undefined) {
+      updateData.credentialId = credentialId || null;
     }
 
     const updatedAgent = await db.aIAgent.update({

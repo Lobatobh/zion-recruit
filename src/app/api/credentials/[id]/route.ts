@@ -10,6 +10,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { encrypt } from '@/lib/encryption';
+import { llmService } from '@/lib/agents/base/LLMService';
 
 // GET /api/credentials/[id] - Get single credential (without decrypting key)
 export async function GET(
@@ -158,6 +159,9 @@ export async function PUT(
       data: updateData,
     });
 
+    // Invalidate LLM credential cache so agents pick up changes
+    llmService.clearCredentialCache();
+
     return NextResponse.json({ credential });
   } catch (error) {
     console.error('Error updating credential:', error);
@@ -252,6 +256,9 @@ export async function PATCH(
       data: updateData,
     });
 
+    // Invalidate LLM credential cache so agents pick up changes
+    llmService.clearCredentialCache();
+
     return NextResponse.json({ credential });
   } catch (error) {
     console.error('Error updating credential:', error);
@@ -297,6 +304,9 @@ export async function DELETE(
     await db.apiCredential.delete({
       where: { id },
     });
+
+    // Invalidate LLM credential cache
+    llmService.clearCredentialCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {

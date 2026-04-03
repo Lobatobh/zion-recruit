@@ -21,6 +21,7 @@ export interface LLMRequest {
   temperature?: number;
   model?: string;
   jsonMode?: boolean;
+  credentialId?: string;  // Optional specific credential
 }
 
 export interface LLMResponse<T = unknown> {
@@ -200,6 +201,30 @@ async function getActiveCredential(): Promise<CredentialInfo> {
 }
 
 /**
+ * Get a specific credential by ID.
+ * Falls back to auto-selection if not found or invalid.
+ */
+async function getCredentialById(credentialId: string | null | undefined): Promise<CredentialInfo> {
+  if (credentialId) {
+    try {
+      const credential = await db.apiCredential.findUnique({
+        where: { id: credentialId },
+      });
+      if (credential) {
+        const info = buildCredentialInfo(credential);
+        if (info) {
+          console.log(`[LLM] Using specified credential "${info.name}" (${info.provider})`);
+          return info;
+        }
+      }
+    } catch (error) {
+      console.warn(`[LLM] Failed to load credential ${credentialId}, falling back to auto-selection`);
+    }
+  }
+  return getActiveCredential();
+}
+
+/**
  * Get all valid AI credentials for fallback purposes.
  */
 async function getAllValidCredentials(): Promise<CredentialInfo[]> {
@@ -268,7 +293,7 @@ class LLMService {
         if (!data) return { success: false, error: 'Failed to parse JSON response', rawContent: content };
       }
 
-      this.trackUsage(cred.id, tokensUsed);
+      this.trackUsage(cred.id, tokensUsed, model, cred.provider, cred.id);
       return { success: true, data, rawContent: content, tokensUsed };
     }
 
@@ -310,7 +335,7 @@ class LLMService {
       if (!data) return { success: false, error: 'Failed to parse JSON response', rawContent: content };
     }
 
-    this.trackUsage(cred.id, tokensUsed);
+    this.trackUsage(cred.id, tokensUsed, model, cred.provider, cred.id);
     return { success: true, data, rawContent: content, tokensUsed };
   }
 
@@ -339,8 +364,28 @@ class LLMService {
       }
     }
 
-    // Get all valid credentials for fallback
-    const allCredentials = await getAllValidCredentials();
+    // Get the right credential(s)
+    let allCredentials: CredentialInfo[];
+    let primaryCredential: CredentialInfo | null = null;
+
+    if (request.credentialId) {
+      // Use the specified credential as primary, with all others as fallback
+      try {
+        primaryCredential = await getCredentialById(request.credentialId);
+      } catch {
+        // Fall through to auto-selection
+      }
+    }
+
+    allCredentials = await getAllValidCredentials();
+
+    // If we have a specific credential, put it first in the list
+    if (primaryCredential) {
+      allCredentials = [
+        primaryCredential,
+        ...allCredentials.filter(c => c.id !== primaryCredential!.id)
+      ];
+    }
     if (allCredentials.length === 0) {
       return {
         success: false,
@@ -503,12 +548,43 @@ Return JSON:
   // Usage Tracking
   // ============================================
 
-  private async trackUsage(credentialId: string, tokensUsed: number): Promise<void> {
+  private async trackUsage(
+    credentialId: string,
+    tokensUsed: number,
+    model?: string,
+    provider?: string,
+    _agentType?: string
+  ): Promise<void> {
     try {
+      // Update credential usage counter
       await db.apiCredential.update({
         where: { id: credentialId },
         data: { currentUsage: { increment: tokensUsed }, lastUsedAt: new Date() },
       });
+
+      // Create detailed usage log record (non-blocking, best-effort)
+      // Fetch tenantId from the credential for proper association
+      db.apiCredential.findUnique({ where: { id: credentialId }, select: { tenantId: true } })
+        .then((cred) => {
+          if (cred) {
+            return db.apiUsageLog.create({
+              data: {
+                credentialId,
+                tenantId: cred.tenantId,
+                requestType: 'chat_completion',
+                model: model || 'unknown',
+                provider: provider || 'unknown',
+                promptTokens: Math.floor(tokensUsed * 0.3),
+                completionTokens: Math.floor(tokensUsed * 0.7),
+                totalTokens: tokensUsed,
+                status: 'SUCCESS',
+              },
+            });
+          }
+        })
+        .catch(() => {
+          // Silently fail — usage logging is non-critical
+        });
     } catch {
       // Silently fail — usage tracking is non-critical
     }
