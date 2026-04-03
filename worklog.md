@@ -1530,3 +1530,70 @@ Stage Summary:
   - src/app/api/candidates/[id]/portal/route.ts (NEW - admin portal API)
   - src/components/candidates/share-portal-dialog.tsx (NEW - portal sharing dialog)
   - src/components/candidates/candidate-profile-panel.tsx (MODIFIED - portal button integration)
+
+---
+## Task ID: 10 - API Bug Fixes (client routes)
+### Work Task
+Fix three critical bugs in client API routes where the response format doesn't match the frontend types, and the PUT endpoint ignores form fields.
+
+### Work Summary
+
+**Fix 1: GET /api/clients (list endpoint)** — `/src/app/api/clients/route.ts`
+- Added `notifyEmail` and `notifyWhatsapp` to the `select` clause (were missing)
+- Transformed response to match `ClientListItem` frontend type:
+  - `_count.jobs` → `stats.totalJobs`
+  - `_count.contacts` → `stats.contactsCount`
+  - `_count.notifications` → `stats.notificationsSent`
+  - Added `activeJobs` count via `db.job.count({ status: 'PUBLISHED' })`
+  - `notifyEmail` → `notificationSettings.emailEnabled`
+  - `notifyWhatsapp` → `notificationSettings.whatsappEnabled`
+  - `logo` → `logoUrl`
+  - Removed `_count`, `notifyEmail`, `notifyWhatsapp`, `logo` from flat response
+
+**Fix 2: GET /api/clients/[id] (detail endpoint)** — `/src/app/api/clients/[id]/route.ts`
+- Added `activeJobs` count query
+- Transformed response to match `ClientDetail` frontend type:
+  - `_count.jobs` → `stats.totalJobs`
+  - `contacts.length` → `stats.contactsCount`
+  - `_count.notifications` → `stats.notificationsSent`
+  - `lastEvent.createdAt` → `stats.lastEventAt` (ISO string)
+  - `notifyFrequency` enum (IMMEDIATE/DAILY_DIGEST/WEEKLY_DIGEST) → `notificationSettings.frequency` (immediate/daily/weekly)
+  - `notifyEmail` → `notificationSettings.emailEnabled`
+  - `notifyWhatsapp` → `notificationSettings.whatsappEnabled`
+  - `aiTone` → `notificationSettings.aiTone`
+  - `notifyEvents` JSON string parsed → `notificationSettings.eventTypes` array
+  - `logo` → `logoUrl`
+  - Removed `_count`, `notifyEmail`, `notifyWhatsapp`, `notifyFrequency`, `notifyEvents`, `aiTone`, `logo` from flat response
+
+**Fix 3: PUT /api/clients/[id] (update endpoint)** — `/src/app/api/clients/[id]/route.ts`
+- Added handling for all missing form fields: `cnpj`, `tradeName`, `legalNature`, `foundingDate`, `companySize`, `shareCapital`, `registration`, `companyEmail`, `companyPhone`, `mainActivity`, `status`, `cep`, `street`, `number`, `complement`, `neighborhood`, `city`, `state`
+- CNPJ normalization (removes non-digits, validates 14 digits)
+- CNPJ unique constraint check (returns 409 if duplicate within tenant)
+- CEP normalization (removes non-digits)
+- Empty string values properly mapped to `null`
+
+**Verification:** ESLint passes cleanly (0 errors in modified files).
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix client creation/editing errors
+
+Work Log:
+- Investigated "Erro ao criar empresa" error reported by user
+- Found 4 critical bugs causing failures:
+  1. API GET /api/clients returned flat fields (_count, notifyEmail, etc.) but frontend expected nested objects (stats, notificationSettings)
+  2. API GET /api/clients/[id] had same data format mismatch - ClientDetail type expected stats.notificationSettings objects
+  3. API PUT /api/clients/[id] only handled basic fields, ignoring 18 new fields (cnpj, tradeName, legalNature, companySize, shareCapital, registration, companyEmail, companyPhone, mainActivity, status, foundingDate, cep, street, number, complement, neighborhood, city, state)
+  4. CreateClientDialog.handleSave didn't show actual API error messages
+- Fixed GET /api/clients: transformed _count → stats object, notifyEmail/notifyWhatsapp → notificationSettings object, logo → logoUrl
+- Fixed GET /api/clients/[id]: added active jobs count query, transformed all flat fields to nested objects matching ClientDetail type, parsed notifyEvents JSON
+- Fixed PUT /api/clients/[id]: added handling for all 18 missing fields, CNPJ normalization + uniqueness check, CEP normalization
+- Added CNPJ uniqueness check to POST /api/clients with proper 409 error
+- Improved CreateClientDialog error handling to show actual API error messages
+- Fixed ClientDetailDialog.fetchClient to extract data.client from API response
+
+Stage Summary:
+- All 4 API endpoints now correctly transform data to match frontend TypeScript types
+- Client creation and editing should work without errors
+- Error messages from API are now properly displayed to users
+- CNPJ uniqueness is properly validated before database operations

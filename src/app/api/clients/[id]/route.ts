@@ -52,6 +52,14 @@ export async function GET(
       );
     }
 
+    // Active jobs count
+    const activeJobsCount = await db.job.count({
+      where: {
+        clientId: id,
+        status: 'PUBLISHED',
+      },
+    });
+
     // Notification stats
     const notificationStats = await db.trackingNotification.groupBy({
       by: ['status'],
@@ -73,11 +81,46 @@ export async function GET(
       select: { createdAt: true },
     });
 
+    // Parse notifyEvents JSON string into array
+    let eventTypes: string[] = [];
+    try {
+      eventTypes = JSON.parse(client.notifyEvents || '[]');
+    } catch {
+      eventTypes = [];
+    }
+
+    // Map notifyFrequency enum to frontend lowercase values
+    const frequencyMap: Record<string, 'immediate' | 'daily' | 'weekly'> = {
+      IMMEDIATE: 'immediate',
+      DAILY_DIGEST: 'daily',
+      WEEKLY_DIGEST: 'weekly',
+    };
+
+    // Build the transformed response matching frontend ClientDetail type
+    const clientData = client as Record<string, unknown>;
+    const { _count, logo, notifyEmail, notifyWhatsapp, notifyFrequency, notifyEvents: _ne, aiTone, ...rest } = clientData;
+
     return NextResponse.json({
       client: {
-        ...client,
-        lastEventAt: lastEvent?.createdAt || null,
+        ...rest,
+        logoUrl: logo || undefined,
+        contacts: client.contacts,
         notificationStats: statsMap,
+        stats: {
+          totalJobs: (client._count as Record<string, number>).jobs || 0,
+          activeJobs: activeJobsCount,
+          totalCandidates: 0,
+          contactsCount: client.contacts.length,
+          notificationsSent: (client._count as Record<string, number>).notifications || 0,
+          lastEventAt: lastEvent?.createdAt?.toISOString() || undefined,
+        },
+        notificationSettings: {
+          emailEnabled: client.notifyEmail as boolean,
+          whatsappEnabled: client.notifyWhatsapp as boolean,
+          frequency: frequencyMap[client.notifyFrequency as string] || 'immediate',
+          aiTone: (client.aiTone as 'professional' | 'casual' | 'formal') || 'professional',
+          eventTypes,
+        },
       },
     });
   } catch (error) {
@@ -125,13 +168,31 @@ export async function PUT(
     const {
       name,
       logo,
-      contactName,
-      contactEmail,
-      contactPhone,
+      cnpj,
+      tradeName,
+      legalNature,
+      foundingDate,
+      companySize,
+      shareCapital,
+      registration,
+      companyEmail,
+      companyPhone,
+      mainActivity,
+      status,
+      cep,
+      street,
+      number,
+      complement,
+      neighborhood,
+      city,
+      state,
       address,
       industry,
       website,
       notes,
+      contactName,
+      contactEmail,
+      contactPhone,
       notifyEmail,
       notifyWhatsapp,
       notifyFrequency,
@@ -145,13 +206,62 @@ export async function PUT(
 
     if (name !== undefined) updateData.name = name.trim();
     if (logo !== undefined) updateData.logo = logo || null;
-    if (contactName !== undefined) updateData.contactName = contactName || null;
-    if (contactEmail !== undefined) updateData.contactEmail = contactEmail || null;
-    if (contactPhone !== undefined) updateData.contactPhone = contactPhone || null;
+
+    // CNPJ: normalize by removing non-digits, validate 14 digits, check uniqueness
+    if (cnpj !== undefined) {
+      const normalizedCnpj = typeof cnpj === 'string' ? cnpj.replace(/\D/g, '') : '';
+      if (normalizedCnpj.length === 14) {
+        // Check CNPJ uniqueness (exclude current client)
+        const cnpjExists = await db.client.findFirst({
+          where: {
+            tenantId: session.user.tenantId,
+            cnpj: normalizedCnpj,
+            id: { not: id },
+          },
+        });
+        if (cnpjExists) {
+          return NextResponse.json(
+            { error: 'Já existe uma empresa com este CNPJ' },
+            { status: 409 }
+          );
+        }
+        updateData.cnpj = normalizedCnpj;
+      } else if (normalizedCnpj.length === 0 || !cnpj) {
+        updateData.cnpj = null;
+      }
+      // If not exactly 14 digits, silently ignore (don't update)
+    }
+
+    if (tradeName !== undefined) updateData.tradeName = tradeName || null;
+    if (legalNature !== undefined) updateData.legalNature = legalNature || null;
+    if (foundingDate !== undefined) updateData.foundingDate = foundingDate || null;
+    if (companySize !== undefined) updateData.companySize = companySize || null;
+    if (shareCapital !== undefined) updateData.shareCapital = shareCapital || null;
+    if (registration !== undefined) updateData.registration = registration || null;
+    if (companyEmail !== undefined) updateData.companyEmail = companyEmail || null;
+    if (companyPhone !== undefined) updateData.companyPhone = companyPhone || null;
+    if (mainActivity !== undefined) updateData.mainActivity = mainActivity || null;
+    if (status !== undefined) updateData.status = status || null;
+
+    // CEP: normalize by removing non-digits
+    if (cep !== undefined) {
+      const normalizedCep = typeof cep === 'string' ? cep.replace(/\D/g, '') : '';
+      updateData.cep = normalizedCep.length > 0 ? normalizedCep : null;
+    }
+
+    if (street !== undefined) updateData.street = street || null;
+    if (number !== undefined) updateData.number = number || null;
+    if (complement !== undefined) updateData.complement = complement || null;
+    if (neighborhood !== undefined) updateData.neighborhood = neighborhood || null;
+    if (city !== undefined) updateData.city = city || null;
+    if (state !== undefined) updateData.state = state || null;
     if (address !== undefined) updateData.address = address || null;
     if (industry !== undefined) updateData.industry = industry || null;
     if (website !== undefined) updateData.website = website || null;
     if (notes !== undefined) updateData.notes = notes || null;
+    if (contactName !== undefined) updateData.contactName = contactName || null;
+    if (contactEmail !== undefined) updateData.contactEmail = contactEmail || null;
+    if (contactPhone !== undefined) updateData.contactPhone = contactPhone || null;
     if (notifyEmail !== undefined) updateData.notifyEmail = Boolean(notifyEmail);
     if (notifyWhatsapp !== undefined) updateData.notifyWhatsapp = Boolean(notifyWhatsapp);
     if (notifyFrequency !== undefined) updateData.notifyFrequency = notifyFrequency;

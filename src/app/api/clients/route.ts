@@ -64,6 +64,8 @@ export async function GET(request: NextRequest) {
           contactEmail: true,
           contactPhone: true,
           website: true,
+          notifyEmail: true,
+          notifyWhatsapp: true,
           isActive: true,
           createdAt: true,
           updatedAt: true,
@@ -81,18 +83,41 @@ export async function GET(request: NextRequest) {
       db.client.count({ where }),
     ]);
 
-    // Enrich with last event date
+    // Enrich with last event date and count active jobs
     const enrichedClients = await Promise.all(
       clients.map(async (client) => {
-        const lastEvent = await db.trackingEvent.findFirst({
-          where: { clientId: client.id },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true },
-        });
+        const [lastEvent, activeJobsCount] = await Promise.all([
+          db.trackingEvent.findFirst({
+            where: { clientId: client.id },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
+          }),
+          db.job.count({
+            where: {
+              clientId: client.id,
+              status: 'PUBLISHED',
+            },
+          }),
+        ]);
+
+        // Transform to match frontend ClientListItem type
+        const { _count, logo, notifyEmail, notifyWhatsapp, ...rest } = client as Record<string, unknown>;
 
         return {
-          ...client,
-          lastEventAt: lastEvent?.createdAt || null,
+          ...rest,
+          logoUrl: logo || undefined,
+          stats: {
+            totalJobs: (client._count as Record<string, number>).jobs || 0,
+            activeJobs: activeJobsCount,
+            totalCandidates: 0,
+            contactsCount: (client._count as Record<string, number>).contacts || 0,
+            notificationsSent: (client._count as Record<string, number>).notifications || 0,
+            lastEventAt: lastEvent?.createdAt?.toISOString() || undefined,
+          },
+          notificationSettings: {
+            emailEnabled: client.notifyEmail as boolean,
+            whatsappEnabled: client.notifyWhatsapp as boolean,
+          },
         };
       })
     );
@@ -195,6 +220,19 @@ export async function POST(request: NextRequest) {
     if (cnpj) {
       normalizedCnpj = cnpj.replace(/\D/g, '');
       if (normalizedCnpj.length !== 14) normalizedCnpj = null;
+    }
+
+    // Check CNPJ uniqueness (global unique constraint)
+    if (normalizedCnpj) {
+      const cnpjExists = await db.client.findFirst({
+        where: { cnpj: normalizedCnpj },
+      });
+      if (cnpjExists) {
+        return NextResponse.json(
+          { error: 'Já existe uma empresa cadastrada com este CNPJ' },
+          { status: 409 }
+        );
+      }
     }
 
     const client = await db.client.create({

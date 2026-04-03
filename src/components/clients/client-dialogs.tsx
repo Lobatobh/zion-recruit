@@ -552,15 +552,18 @@ export function CreateClientDialog({
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Erro ao salvar empresa");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Erro ao salvar empresa");
+      }
 
       toast.success(
         editingClient ? "Empresa atualizada com sucesso!" : "Empresa criada com sucesso!"
       );
       onOpenChange(false);
       onSaved();
-    } catch {
-      toast.error(editingClient ? "Erro ao atualizar empresa" : "Erro ao criar empresa");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : (editingClient ? "Erro ao atualizar empresa" : "Erro ao criar empresa"));
     } finally {
       setSaving(false);
     }

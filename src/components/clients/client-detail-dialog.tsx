@@ -136,7 +136,7 @@ export function ClientDetailDialog({
       const res = await fetch(`/api/clients/${clientId}`);
       if (!res.ok) throw new Error("Erro ao carregar empresa");
       const data = await res.json();
-      setClient(data.data || data);
+      setClient(data.client || data.data || data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
