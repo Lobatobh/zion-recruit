@@ -1,7 +1,10 @@
 [job-processor] Installing dependencies...
 bun install v1.3.10 (30e609e0)
 
-Checked 2 installs across 3 packages (no changes) [2.00ms]
++ @prisma/client@6.19.2
++ z-ai-web-dev-sdk@0.0.17
+
+2 packages installed [1.58s]
 [job-processor] Running bun run dev...
 $ bun --hot index.ts
 38 | var clientVersion = version;
