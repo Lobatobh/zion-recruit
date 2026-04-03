@@ -50,7 +50,7 @@ import {
   type JobItem,
 } from "./client-types";
 import { TimelineView } from "./client-timeline";
-import { AddContactDialog, SendUpdateDialog } from "./client-dialogs";
+import { AddContactDialog, SendUpdateDialog, CreateClientDialog } from "./client-dialogs";
 
 // ============================================
 // SUB-COMPONENT: ClientDetailDialog
@@ -71,6 +71,7 @@ export function ClientDetailDialog({
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [sendUpdateOpen, setSendUpdateOpen] = useState(false);
+  const [editClientOpen, setEditClientOpen] = useState(false);
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
 
@@ -198,15 +199,26 @@ export function ClientDetailDialog({
                       <p className="text-white/80 text-sm">{client.industry}</p>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-white/80 hover:text-white hover:bg-white/10"
-                    onClick={() => setSendUpdateOpen(true)}
-                  >
-                    <Send className="h-4 w-4 mr-1.5" />
-                    Enviar
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-white/80 hover:text-white hover:bg-white/10"
+                      onClick={() => setEditClientOpen(true)}
+                    >
+                      <Edit3 className="h-4 w-4 mr-1.5" />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-white/80 hover:text-white hover:bg-white/10"
+                      onClick={() => setSendUpdateOpen(true)}
+                    >
+                      <Send className="h-4 w-4 mr-1.5" />
+                      Enviar
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Mini stats */}
@@ -503,6 +515,12 @@ export function ClientDetailDialog({
         clientId={clientId!}
         clientName={client?.name || ""}
         contacts={client?.contacts || []}
+      />
+      <CreateClientDialog
+        open={editClientOpen}
+        onOpenChange={setEditClientOpen}
+        editingClient={client}
+        onSaved={() => fetchClient()}
       />
     </>
   );

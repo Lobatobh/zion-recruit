@@ -51,6 +51,7 @@ import {
   ALL_EVENT_TYPES,
   type ClientContact,
   type ClientListItem,
+  type ClientDetail,
 } from "./client-types";
 
 // ============================================
@@ -289,7 +290,7 @@ export function CreateClientDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  editingClient?: ClientListItem | null;
+  editingClient?: ClientListItem | ClientDetail | null;
   onSaved: () => void;
 }) {
   const [saving, setSaving] = useState(false);
@@ -298,18 +299,55 @@ export function CreateClientDialog({
   const [cepLoading, setCepLoading] = useState(false);
   const [form, setForm] = useState(getInitialForm);
 
+  // Reverse frequency map: API enum values -> frontend lowercase
+  const REVERSE_FREQUENCY_MAP: Record<string, "immediate" | "daily" | "weekly"> = {
+    IMMEDIATE: "immediate",
+    DAILY_DIGEST: "daily",
+    WEEKLY_DIGEST: "weekly",
+    immediate: "immediate",
+    daily: "daily",
+    weekly: "weekly",
+  };
+
   useEffect(() => {
     if (open) {
       setActiveTab("company");
       if (editingClient) {
+        const ec = editingClient as ClientDetail;
         setForm((f) => ({
           ...f,
-          name: editingClient.name || "",
-          industry: editingClient.industry || "",
-          website: editingClient.website || "",
-          contactName: editingClient.contactName || "",
-          contactEmail: editingClient.contactEmail || "",
-          contactPhone: editingClient.contactPhone || "",
+          cnpj: ec.cnpj ? formatCnpj(ec.cnpj) : "",
+          name: ec.name || "",
+          tradeName: ec.tradeName || "",
+          legalNature: ec.legalNature || "",
+          companySize: ec.companySize || "",
+          shareCapital: ec.shareCapital || "",
+          registration: ec.registration || "",
+          companyEmail: ec.companyEmail || "",
+          companyPhone: ec.companyPhone || "",
+          mainActivity: ec.mainActivity || "",
+          status: ec.status || "",
+          foundingDate: ec.foundingDate || "",
+          cep: ec.cep ? formatCep(ec.cep) : "",
+          street: ec.street || "",
+          number: ec.number || "",
+          complement: ec.complement || "",
+          neighborhood: ec.neighborhood || "",
+          city: ec.city || "",
+          state: ec.state || "",
+          industry: ec.industry || "",
+          website: ec.website || "",
+          notes: ec.notes || "",
+          contactName: ec.contactName || "",
+          contactEmail: ec.contactEmail || "",
+          contactPhone: ec.contactPhone || "",
+          emailEnabled: ec.notificationSettings?.emailEnabled ?? true,
+          whatsappEnabled: ec.notificationSettings?.whatsappEnabled ?? false,
+          frequency: REVERSE_FREQUENCY_MAP[ec.notificationSettings?.frequency || ""] || "immediate",
+          aiTone: ec.notificationSettings?.aiTone || "professional",
+          eventTypes: ec.notificationSettings?.eventTypes?.length
+            ? ec.notificationSettings.eventTypes
+            : [...ALL_EVENT_TYPES],
         }));
       } else {
         setForm(getInitialForm());
