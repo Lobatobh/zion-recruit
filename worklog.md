@@ -1621,3 +1621,143 @@ Stage Summary:
 - Credential cache is properly invalidated when credentials are updated or deleted
 - ApiUsageLog records are now created for detailed usage analytics
 - Remaining: Task queue worker for auto-execution (deferred - lower priority)
+---
+## Task ID: 2-b - backend-developer
+### Work Task
+Create the AI Task Worker that processes PENDING agent tasks at `/home/z/my-project/src/lib/agents/task-worker.ts`.
+
+### Work Summary
+Created `/home/z/my-project/src/lib/agents/task-worker.ts` (503 lines) — the core task processing engine for the Zion Recruit AI agent system. The worker bridges the gap between the agents API route (which creates PENDING tasks) and actual LLM execution.
+
+**Key components:**
+
+1. **`processTask(taskId)`** — Main entry point that:
+   - Loads task with agent relation from DB
+   - Validates task status (PENDING or RETRY)
+   - Marks task as RUNNING + agent status as RUNNING
+   - Parses task input JSON
+   - Constructs prompts via `constructPrompt()` based on agent type
+   - Calls LLM via `llmService.call()` (with fallback to `callWithTracking` when available)
+   - On success: updates task to COMPLETED, agent stats (successCount, totalTokensUsed, lastRunAt), and runs post-processing
+   - On failure: sets task to RETRY or FAILED based on maxAttempts, updates agent error stats
+   - Handles unexpected errors with proper cleanup
+
+2. **`processPendingTasks(limit)`** — Batch processor for cron jobs, processes up to N pending tasks ordered by priority desc + createdAt asc
+
+3. **Prompt Construction System** — `constructPrompt()` dispatches to type-specific builders:
+   - `JOB_PARSER` → delegates to `llmService.createJobParsingPrompt()` (maps `{system, user}` → `{systemPrompt, userPrompt}`)
+   - `SCREENING` → custom resume-vs-job analysis prompt (pt-BR, 3000/2000 char truncation)
+   - `MATCHING` → delegates to `llmService.createMatchingPrompt()`
+   - `SOURCING` → custom candidate sourcing prompt generating 5 fictitious candidates
+   - `CONTACT` → delegates to `llmService.createContactMessagePrompt()`
+   - `SCHEDULER` → custom interview scheduling prompt with time slots
+   - `DISC_ANALYZER` → delegates to `llmService.createDISCAnalysisPrompt()`
+   - `REPORT` → custom executive report generation prompt
+   - `shouldUseJson()` determines JSON mode for structured output agents
+
+4. **Post-processing System** — `postProcess()` dispatches type-specific entity updates:
+   - `JOB_PARSER` → updates Job model (aiParsedSkills, aiParsedKeywords, aiParsedSeniority, aiSummary, discProfileRequired)
+   - `MATCHING` → updates Candidate (matchScore, matchDetails, skillsScore, experienceScore)
+   - `DISC_ANALYZER` → updates DISCTest (aiAnalysis, aiStrengths, aiWeaknesses, aiWorkStyle)
+   - `SCREENING` → updates Candidate (aiSummary, matchScore, matchDetails)
+
+5. **Type Definitions** — `TrackedLLMRequest` extends `LLMRequest` with agentType/jobId/candidateId/taskId; `TrackedLLMResponse` extends `LLMResponse` with latencyMs/costCents
+
+**Design decisions:**
+- Graceful fallback: uses `llmService.call()` if `callWithTracking` is not yet available (will be added by another agent)
+- All prompts in pt-BR
+- Proper error isolation: post-processing failures are caught and logged (warn), not propagated
+- Retry logic: respects maxAttempts, sets RETRY status for retryable failures
+- All Prisma field names match schema (camelCase model names: aITask, aIAgent, dISCTest)
+
+**Lint:** Zero errors.
+
+---
+## Task ID: 2-a - backend-engineer
+### Work Task
+Enhance LLMService with cost calculation, duration tracking, and enhanced usage logging.
+
+### Work Summary
+Enhanced `/home/z/my-project/src/lib/agents/base/LLMService.ts` with the following features:
+
+**1. Cost Calculation Table & Method:**
+- Added `MODEL_COSTS` constant with per-1000-token pricing for 13 models across OpenAI, OpenRouter, Gemini, and Anthropic providers
+- Added `DEFAULT_COST` fallback for unknown models
+- Added `calculateCost(model, totalTokens)` method using 70/30 completion/prompt token split, returns cost in cents (ceiling rounded)
+
+**2. Enhanced LLMResponse type:**
+- Added `costCents?: number` — estimated cost of the API call in cents
+- Added `latencyMs?: number` — duration of the API call in milliseconds
+- Backward compatible (both fields optional)
+
+**3. New `callWithTracking` method:**
+- Wraps existing `call()` method, adds latency tracking via `Date.now()` timing
+- Computes cost via `calculateCost()` and attaches both to the response
+- Accepts extended request with `agentType`, `jobId`, `candidateId`, `taskId` for future enhanced logging
+- Uses `result.latencyMs ?? latencyMs` to prefer the inner `callWithModel` timing when available
+
+**4. Enhanced `callWithModel` method:**
+- Records `startTime = Date.now()` at top of method
+- Calculates `latencyMs` and `costCents` after successful fetch
+- All responses (success, error, no content, parse failure) now include `costCents` and `latencyMs`
+- Error responses (non-OK HTTP) are now tracked with proper `trackUsage` call including `status: 'RATE_LIMITED'` or `'ERROR'` and `errorMessage`
+
+**5. Enhanced `trackUsage` method:**
+- Changed from positional params to single `params` object
+- Now accepts: `credentialId`, `tokensUsed`, `model`, `provider`, `durationMs`, `costCents`, `status` (ApiCallStatus), `errorMessage`, `agentType`, `jobId`, `candidateId`, `taskId`
+- `db.apiUsageLog.create` now writes all new fields: `costCents`, `durationMs`, `status`, `errorMessage`, `agentType`, `jobId`, `candidateId`, `taskId`
+- Provider cast to `ApiProvider` enum with `OPENAI` fallback
+- Still non-blocking (best-effort, silent catch)
+
+**6. New `clearResponseCache` method:**
+- Public method that clears the entire `responseCache` Map
+
+**7. Import update:**
+- Added `ApiCallStatus` import from `@prisma/client`
+
+**Backward compatibility:** All existing methods (`call`, `callLLM`, `estimateTokens`, `fitsInTokens`, `clearCredentialCache`, prompt helpers) remain unchanged. The `call` method now returns `LLMResponse` with the additional optional fields populated.
+
+**Verification:** ESLint passes with zero errors and zero warnings.
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: Fix 5 AI agent-API integration problems
+
+Work Log:
+- Analyzed current state: credentialId already in schema & UI (agent detail dialog), task worker missing
+- Enhanced LLMService (src/lib/agents/base/LLMService.ts):
+  - Added MODEL_COSTS table with pricing for all providers/models
+  - Added calculateCost() method for cost estimation in cents
+  - Added callWithTracking() wrapper method with latency + cost tracking
+  - Enhanced trackUsage() with durationMs, costCents, status, errorMessage, agentType, jobId, candidateId, taskId
+  - Added clearResponseCache() method
+  - Added duration tracking to callWithModel() (Anthropic + OpenAI paths)
+  - Proper error classification (RATE_LIMITED vs ERROR) in usage logs
+- Created task worker (src/lib/agents/task-worker.ts):
+  - processTask(taskId) - loads task, constructs prompt, calls LLM, updates DB
+  - processPendingTasks(limit) - batch processor for cron jobs
+  - 8 prompt constructors (one per agent type: JOB_PARSER, SCREENING, MATCHING, SOURCING, CONTACT, SCHEDULER, DISC_ANALYZER, REPORT)
+  - 4 post-processors (apply results to Job, Candidate, DISCTest entities)
+  - Uses agent's credentialId for per-agent API credential assignment
+  - Handles retry logic (RETRY status up to maxAttempts)
+  - Updates agent stats (successCount, errorCount, totalTokensUsed, lastRunAt)
+- Connected task worker to agents POST route (/api/agents/route.ts):
+  - After creating PENDING task, fires processTask() in background (non-blocking)
+  - Passes jobId and candidateId from input to task creation
+- Added cache invalidation to credentials POST route (/api/credentials/route.ts):
+  - llmService.clearCredentialCache() after creating new credential
+- Server rebuilt and verified (zero lint errors, build passes, health check OK)
+
+Stage Summary:
+- 5 problems fixed:
+  1. ✅ credentialId per agent - Already existed in schema + UI, now connected to worker
+  2. ✅ LLM service enhanced with cost calculation, duration tracking, detailed usage logging
+  3. ✅ Task queue worker created and connected (tasks execute immediately when agent is run)
+  4. ✅ Credential cache invalidation added to POST (create), PUT, PATCH, DELETE routes
+  5. ✅ Enhanced ApiUsageLog with costCents, durationMs, status, errorMessage, agentType, jobId, candidateId, taskId
+- Files changed:
+  - src/lib/agents/base/LLMService.ts (enhanced with cost, duration, tracking)
+  - src/lib/agents/task-worker.ts (NEW - task processor)
+  - src/app/api/agents/route.ts (connected worker to POST)
+  - src/app/api/credentials/route.ts (added cache invalidation to POST)

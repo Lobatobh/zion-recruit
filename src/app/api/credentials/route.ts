@@ -12,6 +12,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { ApiProvider } from '@prisma/client';
 import { encrypt, decrypt, checkEncryptionStatus } from '@/lib/encryption';
+import { llmService } from '@/lib/agents/base/LLMService';
 
 // Log encryption status on module load
 const encryptionStatus = checkEncryptionStatus();
@@ -200,6 +201,9 @@ export async function POST(request: NextRequest) {
         webhookUrl,
       },
     });
+
+    // Invalidate LLM credential cache so agents pick up the new credential
+    llmService.clearCredentialCache();
 
     return NextResponse.json({ credential }, { status: 201 });
   } catch (error) {

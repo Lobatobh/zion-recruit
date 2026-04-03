@@ -1,10 +1,7 @@
 [messaging-ws] Installing dependencies...
 bun install v1.3.10 (30e609e0)
 
-+ socket.io@4.8.3
-
-22 packages installed [84.00ms]
+Checked 22 installs across 23 packages (no changes) [1.00ms]
 [messaging-ws] Running bun run dev...
 $ bun --hot index.ts
  Messaging WebSocket Service running on port 3004
-error: script "dev" was terminated by signal SIGTERM (Polite quit request)

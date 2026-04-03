@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { processTask } from "@/lib/agents/task-worker";
 
 // GET /api/agents - List all AI agents
 export async function GET(request: NextRequest) {
@@ -126,6 +127,8 @@ export async function POST(request: NextRequest) {
         input: JSON.stringify(input || {}),
         status: "PENDING",
         priority: 5,
+        jobId: input?.jobId as string | undefined,
+        candidateId: input?.candidateId as string | undefined,
       },
     });
 
@@ -139,9 +142,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Process the task immediately in the background (non-blocking)
+    processTask(task.id).catch((error) => {
+      console.error(`[Agent] Background task ${task.id} failed:`, error);
+    });
+
     return NextResponse.json({
       task,
-      message: "Tarefa criada com sucesso",
+      message: "Tarefa criada e em execução",
     });
   } catch (error) {
     console.error("Error running agent:", error);

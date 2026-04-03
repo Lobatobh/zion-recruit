@@ -4,11 +4,12 @@
  * Uses credentials from the database (ApiCredential) to call AI providers directly.
  * Supports OpenAI, OpenRouter, Gemini, and Anthropic via OpenAI-compatible endpoints.
  * Includes automatic model fallback for region-restricted scenarios.
+ * Enhanced with cost calculation, duration tracking, and detailed usage logging.
  */
 
 import { db } from '@/lib/db';
 import { decrypt } from '@/lib/encryption';
-import { ApiProvider } from '@prisma/client';
+import { ApiProvider, ApiCallStatus } from '@prisma/client';
 
 // ============================================
 // Types
@@ -31,6 +32,8 @@ export interface LLMResponse<T = unknown> {
   tokensUsed?: number;
   cached?: boolean;
   error?: string;
+  costCents?: number;
+  latencyMs?: number;
 }
 
 export interface CacheOptions {
@@ -39,6 +42,34 @@ export interface CacheOptions {
   tenantId?: string;
   cacheKey?: string;
 }
+
+// ============================================
+// Cost Calculation
+// ============================================
+
+// Cost in cents per 1000 tokens
+const MODEL_COSTS: Record<string, { input: number; output: number }> = {
+  // OpenAI
+  'gpt-4o-mini': { input: 0.015, output: 0.06 },
+  'gpt-4o': { input: 0.25, output: 1.0 },
+  'gpt-4-turbo': { input: 1.0, output: 3.0 },
+  'gpt-3.5-turbo': { input: 0.005, output: 0.015 },
+  // OpenRouter
+  'deepseek/deepseek-chat': { input: 0.014, output: 0.028 },
+  'anthropic/claude-3.5-sonnet': { input: 0.3, output: 1.5 },
+  'anthropic/claude-3-haiku': { input: 0.025, output: 0.125 },
+  'google/gemini-2.0-flash-001': { input: 0.0075, output: 0.03 },
+  // Gemini
+  'gemini-2.0-flash': { input: 0.0075, output: 0.03 },
+  'gemini-1.5-pro': { input: 0.125, output: 0.5 },
+  'gemini-1.5-flash': { input: 0.0075, output: 0.03 },
+  // Anthropic
+  'claude-3-5-sonnet-20241022': { input: 0.3, output: 1.5 },
+  'claude-3-haiku-20240307': { input: 0.025, output: 0.125 },
+};
+
+// Default cost if model not in table
+const DEFAULT_COST = { input: 0.05, output: 0.15 };
 
 // ============================================
 // Provider Configuration
@@ -250,6 +281,24 @@ class LLMService {
   private responseCache: Map<string, { data: unknown; expiresAt: number }> = new Map();
 
   // ============================================
+  // Cost Calculation
+  // ============================================
+
+  /**
+   * Calculate the estimated cost in cents for a given model and total token count.
+   * Uses a 70/30 split between completion and prompt tokens as approximation.
+   */
+  calculateCost(model: string, totalTokens: number): number {
+    const costs = MODEL_COSTS[model] || DEFAULT_COST;
+    const promptTokens = Math.floor(totalTokens * 0.3);
+    const completionTokens = Math.floor(totalTokens * 0.7);
+    return Math.ceil(
+      (promptTokens * costs.input) / 1000 +
+      (completionTokens * costs.output) / 1000
+    );
+  }
+
+  // ============================================
   // Internal: call with specific model
   // ============================================
 
@@ -262,6 +311,8 @@ class LLMService {
     temperature: number,
     jsonMode: boolean
   ): Promise<LLMResponse<T>> {
+    const startTime = Date.now();
+
     // Anthropic native format
     if (cred.provider === ApiProvider.ANTHROPIC) {
       const response = await fetch(`${cred.baseUrl}/messages`, {
@@ -278,23 +329,68 @@ class LLMService {
 
       if (!response.ok) {
         const errText = await response.text();
+        const latencyMs = Date.now() - startTime;
+        const status: ApiCallStatus = response.status === 429 ? 'RATE_LIMITED' : 'ERROR';
+        this.trackUsage({
+          credentialId: cred.id,
+          tokensUsed: 0,
+          model,
+          provider: cred.provider,
+          durationMs: latencyMs,
+          status,
+          errorMessage: `API error (${response.status}): ${errText}`,
+        });
         throw new Error(`API error (${response.status}): ${errText}`);
       }
 
       const result = await response.json();
       const content = result.content?.[0]?.text || '';
       const tokensUsed = (result.usage?.input_tokens || 0) + (result.usage?.output_tokens || 0);
+      const latencyMs = Date.now() - startTime;
+      const costCents = this.calculateCost(model, tokensUsed);
 
-      if (!content) return { success: false, error: 'No response from LLM' };
+      if (!content) {
+        this.trackUsage({
+          credentialId: cred.id,
+          tokensUsed,
+          model,
+          provider: cred.provider,
+          durationMs: latencyMs,
+          costCents,
+          status: 'ERROR',
+          errorMessage: 'No response from LLM',
+        });
+        return { success: false, error: 'No response from LLM', costCents, latencyMs };
+      }
 
       let data: T | undefined;
       if (jsonMode) {
         data = this.parseJsonSafe<T>(content);
-        if (!data) return { success: false, error: 'Failed to parse JSON response', rawContent: content };
+        if (!data) {
+          this.trackUsage({
+            credentialId: cred.id,
+            tokensUsed,
+            model,
+            provider: cred.provider,
+            durationMs: latencyMs,
+            costCents,
+            status: 'ERROR',
+            errorMessage: 'Failed to parse JSON response',
+          });
+          return { success: false, error: 'Failed to parse JSON response', rawContent: content, tokensUsed, costCents, latencyMs };
+        }
       }
 
-      this.trackUsage(cred.id, tokensUsed, model, cred.provider, cred.id);
-      return { success: true, data, rawContent: content, tokensUsed };
+      this.trackUsage({
+        credentialId: cred.id,
+        tokensUsed,
+        model,
+        provider: cred.provider,
+        durationMs: latencyMs,
+        costCents,
+        status: 'SUCCESS',
+      });
+      return { success: true, data, rawContent: content, tokensUsed, costCents, latencyMs };
     }
 
     // OpenAI-compatible format (OpenAI, OpenRouter, Gemini)
@@ -320,23 +416,68 @@ class LLMService {
 
     if (!response.ok) {
       const errText = await response.text();
+      const latencyMs = Date.now() - startTime;
+      const status: ApiCallStatus = response.status === 429 ? 'RATE_LIMITED' : 'ERROR';
+      this.trackUsage({
+        credentialId: cred.id,
+        tokensUsed: 0,
+        model,
+        provider: cred.provider,
+        durationMs: latencyMs,
+        status,
+        errorMessage: `API error (${response.status}): ${errText}`,
+      });
       throw new Error(`API error (${response.status}): ${errText}`);
     }
 
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content;
     const tokensUsed = result.usage?.total_tokens || 0;
+    const latencyMs = Date.now() - startTime;
+    const costCents = this.calculateCost(model, tokensUsed);
 
-    if (!content) return { success: false, error: 'No response from LLM' };
+    if (!content) {
+      this.trackUsage({
+        credentialId: cred.id,
+        tokensUsed,
+        model,
+        provider: cred.provider,
+        durationMs: latencyMs,
+        costCents,
+        status: 'ERROR',
+        errorMessage: 'No response from LLM',
+      });
+      return { success: false, error: 'No response from LLM', costCents, latencyMs };
+    }
 
     let data: T | undefined;
     if (jsonMode) {
       data = this.parseJsonSafe<T>(content);
-      if (!data) return { success: false, error: 'Failed to parse JSON response', rawContent: content };
+      if (!data) {
+        this.trackUsage({
+          credentialId: cred.id,
+          tokensUsed,
+          model,
+          provider: cred.provider,
+          durationMs: latencyMs,
+          costCents,
+          status: 'ERROR',
+          errorMessage: 'Failed to parse JSON response',
+        });
+        return { success: false, error: 'Failed to parse JSON response', rawContent: content, tokensUsed, costCents, latencyMs };
+      }
     }
 
-    this.trackUsage(cred.id, tokensUsed, model, cred.provider, cred.id);
-    return { success: true, data, rawContent: content, tokensUsed };
+    this.trackUsage({
+      credentialId: cred.id,
+      tokensUsed,
+      model,
+      provider: cred.provider,
+      durationMs: latencyMs,
+      costCents,
+      status: 'SUCCESS',
+    });
+    return { success: true, data, rawContent: content, tokensUsed, costCents, latencyMs };
   }
 
   // ============================================
@@ -479,6 +620,34 @@ class LLMService {
   }
 
   // ============================================
+  // Call with Tracking
+  // ============================================
+
+  /**
+   * Wrapper around `call` that adds latency tracking and cost calculation.
+   * Accepts optional agentType, jobId, candidateId, and taskId for enhanced usage logging.
+   */
+  async callWithTracking<T = unknown>(
+    request: LLMRequest & {
+      agentType?: string;
+      jobId?: string;
+      candidateId?: string;
+      taskId?: string;
+    },
+    cache?: CacheOptions
+  ): Promise<LLMResponse<T>> {
+    const startTime = Date.now();
+    const result = await this.call<T>(request, cache);
+    const latencyMs = Date.now() - startTime;
+    
+    return {
+      ...result,
+      latencyMs: result.latencyMs ?? latencyMs,
+      costCents: result.costCents ?? (result.tokensUsed ? this.calculateCost(request.model || '', result.tokensUsed) : 0),
+    };
+  }
+
+  // ============================================
   // Optimized Prompt Helpers
   // ============================================
 
@@ -548,13 +717,39 @@ Return JSON:
   // Usage Tracking
   // ============================================
 
-  private async trackUsage(
-    credentialId: string,
-    tokensUsed: number,
-    model?: string,
-    provider?: string,
-    _agentType?: string
-  ): Promise<void> {
+  /**
+   * Track API usage with enhanced parameters including duration, cost, status, and context.
+   * Creates a detailed usage log record in the database.
+   */
+  private async trackUsage(params: {
+    credentialId: string;
+    tokensUsed: number;
+    model?: string;
+    provider?: string;
+    durationMs?: number;
+    costCents?: number;
+    status?: ApiCallStatus;
+    errorMessage?: string;
+    agentType?: string;
+    jobId?: string;
+    candidateId?: string;
+    taskId?: string;
+  }): Promise<void> {
+    const {
+      credentialId,
+      tokensUsed,
+      model,
+      provider,
+      durationMs,
+      costCents,
+      status = 'SUCCESS',
+      errorMessage,
+      agentType,
+      jobId,
+      candidateId,
+      taskId,
+    } = params;
+
     try {
       // Update credential usage counter
       await db.apiCredential.update({
@@ -573,11 +768,18 @@ Return JSON:
                 tenantId: cred.tenantId,
                 requestType: 'chat_completion',
                 model: model || 'unknown',
-                provider: provider || 'unknown',
+                provider: (provider as ApiProvider) || ApiProvider.OPENAI,
                 promptTokens: Math.floor(tokensUsed * 0.3),
                 completionTokens: Math.floor(tokensUsed * 0.7),
                 totalTokens: tokensUsed,
-                status: 'SUCCESS',
+                costCents: costCents || 0,
+                durationMs: durationMs || null,
+                status,
+                errorMessage: errorMessage || null,
+                agentType: agentType || null,
+                jobId: jobId || null,
+                candidateId: candidateId || null,
+                taskId: taskId || null,
               },
             });
           }
@@ -600,6 +802,13 @@ Return JSON:
   // ============================================
   // Caching
   // ============================================
+
+  /**
+   * Clear the entire response cache.
+   */
+  clearResponseCache(): void {
+    this.responseCache.clear();
+  }
 
   private getFromCache(key: string): unknown | null {
     const cached = this.responseCache.get(key);
