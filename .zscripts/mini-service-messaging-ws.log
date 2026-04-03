@@ -7,3 +7,4 @@ bun install v1.3.10 (30e609e0)
 [messaging-ws] Running bun run dev...
 $ bun --hot index.ts
  Messaging WebSocket Service running on port 3004
+error: script "dev" was terminated by signal SIGTERM (Polite quit request)
