@@ -28,7 +28,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -531,8 +530,8 @@ export function CreateClientDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-3xl flex flex-col p-0 gap-0 overflow-hidden max-h-[85vh] sm:max-h-[90vh]">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {editingClient ? (
               <Building2 className="h-5 w-5 text-teal-600" />
@@ -548,9 +547,9 @@ export function CreateClientDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
           {/* Tab Navigation */}
-          <TabsList className="w-full grid grid-cols-4 mb-1">
+          <TabsList className="w-full grid grid-cols-4 mx-6 shrink-0">
             <TabsTrigger value="company" className="text-xs sm:text-sm gap-1.5">
               <Building2 className="h-3.5 w-3.5 hidden sm:block" />
               Dados Cadastrais
@@ -569,7 +568,8 @@ export function CreateClientDialog({
             </TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 pr-1 -mr-3 h-[calc(92vh-14rem)]">
+          {/* Scrollable content area */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 pb-4">
             {/* ====== TAB 1: Dados Cadastrais ====== */}
             <TabsContent value="company" className="mt-0">
               <div className="grid gap-5 pb-6">
@@ -1027,11 +1027,11 @@ export function CreateClientDialog({
                 </div>
               </div>
             </TabsContent>
-          </ScrollArea>
+          </div>
         </Tabs>
 
         {/* Footer with navigation + save */}
-        <DialogFooter className="pt-3 border-t flex flex-col sm:flex-row gap-2">
+        <DialogFooter className="px-6 py-3 border-t flex flex-col sm:flex-row gap-2 shrink-0 bg-background">
           <div className="flex-1 flex items-center gap-1">
             {activeTab !== "company" && (
               <Button
