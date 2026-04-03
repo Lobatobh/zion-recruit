@@ -350,11 +350,45 @@ model Candidate {
   interviews          Interview[]
   trackingEvents      TrackingEvent[]
   portalAccess        CandidatePortalAccess?
+  stageHistory        CandidateStageHistory[]
 
   @@index([tenantId, jobId])
   @@index([tenantId, status])
   @@index([tenantId, email])
   @@map("candidates")
+}
+
+// ============================================
+// CANDIDATE STAGE HISTORY
+// Tracks stage changes for candidate portal transparency
+// ============================================
+
+model CandidateStageHistory {
+  id              String   @id @default(cuid())
+  candidateId     String
+  tenantId        String
+  
+  fromStageId     String?
+  fromStageName   String?
+  
+  toStageId       String?
+  toStageName     String?
+  
+  status          CandidateStatus @default(SOURCED)
+  
+  changedById     String?   // User who made the change
+  changedByName   String?   // Denormalized for display
+  
+  note            String?   // Optional note about the change
+  isReverted      Boolean   @default(false)
+  
+  createdAt       DateTime  @default(now())
+
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId, createdAt])
+  @@index([tenantId, candidateId])
+  @@map("candidate_stage_history")
 }
 
 // ============================================

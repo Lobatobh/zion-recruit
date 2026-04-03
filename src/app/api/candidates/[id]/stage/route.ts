@@ -1,6 +1,7 @@
 /**
  * Candidate Stage API - Zion Recruit
  * Handles moving candidates between pipeline stages
+ * Records stage change history for candidate portal transparency
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -26,7 +27,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { id: candidateId } = await params;
     const body = await request.json();
-    const { stageId } = body;
+    const { stageId, note } = body;
 
     if (!stageId) {
       return NextResponse.json(
@@ -74,34 +75,73 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const previousStageId = candidate.pipelineStageId;
     const previousStageName = candidate.pipelineStage?.name || "Sem etapa";
 
-    // Update candidate's stage
-    const updatedCandidate = await db.candidate.update({
-      where: { id: candidateId },
-      data: {
-        pipelineStageId: stageId,
-      },
-      include: {
-        job: {
-          select: {
-            id: true,
-            title: true,
-            department: true,
+    // Determine new candidate status based on stage
+    let newStatus = candidate.status;
+    if (newStage.isHired) {
+      newStatus = "HIRED";
+    } else if (newStage.isRejected) {
+      newStatus = "REJECTED";
+    } else if (previousStageId === stageId) {
+      // No change needed
+      return NextResponse.json({
+        candidate,
+        message: "Candidato já está nesta etapa",
+        previousStageId,
+        newStageId: stageId,
+      });
+    }
+
+    // Update candidate's stage and status in a transaction
+    const updatedCandidate = await db.$transaction(async (tx) => {
+      // Update candidate
+      const updated = await tx.candidate.update({
+        where: { id: candidateId },
+        data: {
+          pipelineStageId: stageId,
+          status: newStatus,
+        },
+        include: {
+          job: {
+            select: {
+              id: true,
+              title: true,
+              department: true,
+            },
+          },
+          pipelineStage: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-        pipelineStage: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-          },
+      });
+
+      // Record stage change in history
+      await tx.candidateStageHistory.create({
+        data: {
+          candidateId,
+          tenantId: session.user.tenantId!,
+          fromStageId: previousStageId,
+          fromStageName: previousStageName,
+          toStageId: stageId,
+          toStageName: newStage.name,
+          status: newStatus,
+          changedById: session.user.id,
+          changedByName: session.user.name || "Recrutador",
+          note: note || undefined,
         },
-      },
+      });
+
+      return updated;
     });
 
     return NextResponse.json({
       candidate: updatedCandidate,
       previousStageId,
       newStageId: stageId,
+      newStatus,
     });
   } catch (error) {
     console.error("Error moving candidate:", error);

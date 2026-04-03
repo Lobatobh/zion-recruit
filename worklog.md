@@ -1356,3 +1356,142 @@ Stage Summary:
 - Added companyEmail, companyPhone, notes fields to complete registration
 - Files changed:
   - src/components/clients/client-dialogs.tsx (payload fix + new form fields)
+
+---
+## Task ID: 2+3 - full-stack-developer
+### Work Task
+Update two portal API routes (applications and verify) to provide rich timeline and stage history data for candidates viewing their recruitment process status.
+
+### Work Summary
+Rewrote both portal API routes with comprehensive timeline, stage history, and pt-BR localization:
+
+**File 1: `/home/z/my-project/src/app/api/portal/applications/route.ts`** — Complete rewrite:
+- GET endpoint with `x-portal-token` header authentication
+- Fetches all applications for the candidate's email with full relations
+- Includes `CandidateStageHistory` data ordered by `createdAt desc`
+- Builds rich timeline per application:
+  - All pipeline stages with `isCurrent`, `isCompleted`, `isPending` flags
+  - Progress percentage (completed stages / total stages * 100)
+- Builds unified `statusHistory` array with typed events:
+  - `STAGE_CHANGE` — from CandidateStageHistory records (skips reverted)
+  - `INTERVIEW` — scheduled or completed interview events
+  - `DISC_TEST` — sent, started, or completed DISC test events
+  - `STATUS_CHANGE` — initial application registration
+- Each event has: id, type, title, description, date, metadata object
+- Returns formatted applications with: job details, currentStage, timeline, statusHistory, interviews, discTest, notes, matchScore, rating, feedback, progress
+- All status labels in pt-BR (SOURCED→"Fonte", APPLIED→"Candidatado", SCREENING→"Triagem", INTERVIEWING→"Entrevista", DISC_TEST→"Avaliação DISC", OFFERED→"Proposta Enviada", HIRED→"Contratado", REJECTED→"Não Selecionado", WITHDRAWN→"Desistiu", NO_RESPONSE→"Sem Resposta")
+- Interview and DISC status/type labels also in pt-BR
+- Error messages in pt-BR
+
+**File 2: `/home/z/my-project/src/app/api/portal/verify/route.ts`** — Updated with timeline data:
+- Extracted shared `buildTimelineAndHistory()` helper function
+- Same timeline/statusHistory/progress computation as applications API
+- Each application in the `applications` array now includes: `timeline`, `statusHistory`, `progress`, `statusLabel`
+- Added `statusLabel` and `typeLabel`/`statusLabel` to candidate, currentApplication, and upcomingInterviews
+- Added `statusLabel` to discTest response
+- Added null guard for tenant (prevents crash when job is null)
+- All existing functionality preserved (portal access update, conversations, messages)
+
+**Lint:** Both files pass ESLint with zero errors. Pre-existing lint error in `serve.js` (unrelated).
+---
+## Task ID: 5 + 6 + 7 - full-stack-developer
+### Work Task
+Rewrite 3 portal frontend components for the Zion Recruit ATS project: application-status.tsx, portal-dashboard.tsx, and portal-auth.tsx. All components must be in pt-BR with premium, modern design using shadcn/ui, Tailwind CSS, framer-motion, and Lucide icons.
+
+### Work Summary
+Completely rewrote all 3 portal components with the following features:
+
+**File 1: `/src/components/portal/application-status.tsx` (~600 lines)**
+- Self-contained component with `ApplicationStatusProps { token: string }` — fetches its own data from `/api/portal/applications` with `x-portal-token` header
+- Header with FileText icon, "Minhas Candidaturas" title, count badge, and filter buttons (Todas, Em Andamento, Finalizadas)
+- Application cards with:
+  - Job title, company name (Building icon), location (MapPin icon), applied date in pt-BR
+  - MatchScoreRing: animated SVG ring showing match score (color-coded: green ≥80, amber ≥60, red <60)
+  - Status badge colored by currentStage.color
+  - HiredCelebrationCard: gradient emerald card with sparkle particles, PartyPopper icon, "Parabéns! Você foi contratado!"
+  - RejectionCard: gentle rose-themed card with "Não foi desta vez" message
+  - PipelineStepper: horizontal (desktop) / vertical (mobile) pipeline visualization with animated progress bar, completed stages (green checkmark), current stage (pulsing ring animation), pending stages (gray outline)
+  - Collapsible status history timeline with colored icons per type (STAGE_CHANGE=green, INTERVIEW=violet, DISC_TEST=amber, STATUS_CHANGE varies by status)
+  - Quick info grid (2x2): Etapa Atual, Modelo, Tipo, Salário (with pt-BR labels)
+  - Action buttons: DISC test (amber gradient), Interview (violet outline)
+- Empty state: animated FileText icon with "Nenhuma candidatura ainda" message
+- Loading skeleton state
+- All animations via framer-motion: stagger entrance, pulse, fade-in
+
+**File 2: `/src/components/portal/portal-dashboard.tsx` (~350 lines)**
+- Complete pt-BR translation of all text (no English remaining)
+- Glassmorphism header with backdrop-blur, "Portal do Candidato" subtitle, "Bem-vindo, [name]", "Sair" button
+- 5 pt-BR tab labels: "Visão Geral", "Candidaturas", "Entrevistas", "Mensagens", "Meu Perfil"
+- Emerald-themed tab styling with responsive label hiding on mobile
+- Overview tab: 4 StatCards (Total de Candidaturas, Entrevistas Agendadas, Status Atual, Perfil Completo) with stagger entrance animations, active applications list with match scores, upcoming interviews with pt-BR date formatting, quick action cards (Atualizar Perfil, Falar com Recrutador)
+- Applications tab uses new ApplicationStatus component (token-only prop)
+- Interviews tab uses existing InterviewSchedule component
+- Messages tab uses existing PortalMessages component
+- Profile tab uses existing ProfileEditor component
+- Status labels map in pt-BR (Candidatado, Em Triagem, Em Entrevista, Avaliação DISC, etc.)
+- Loading/error states with emerald-themed design
+- framer-motion stagger animations throughout
+
+**File 3: `/src/components/portal/portal-auth.tsx` (~160 lines)**
+- Complete pt-BR translation: all labels, buttons, placeholders, error/success messages
+- Emerald/teal gradient background: `from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800`
+- Emerald icon background: `bg-emerald-100 dark:bg-emerald-900` with `text-emerald-600 dark:text-emerald-400`
+- Shield icon replacing Key icon for premium look
+- Gradient buttons: `from-emerald-600 to-teal-600` with shadow
+- Decorative background blur orbs
+- framer-motion entrance animations (card, icon, form transitions)
+- AnimatePresence for smooth message/form transitions
+- "Powered by Zion Recruit" footer branding
+- All translations: "Portal do Candidato", "Solicitar Link de Acesso", "Token de Acesso", "Acessar Portal", "Sair", etc.
+
+**Technical details:**
+- All files use "use client" directive
+- All text in pt-BR (Brazilian Portuguese)
+- Uses shadcn/ui components: Card, Button, Badge, Progress, Tabs, Collapsible, Skeleton, Separator, Alert, Input, Label
+- Uses framer-motion (motion, AnimatePresence) for all animations
+- Uses Lucide icons throughout
+- Uses cn() from @/lib/utils for className merging
+- Responsive mobile-first design
+- ESLint passes with zero errors on all 3 files (3 pre-existing errors in serve.js are unrelated)
+- Dev server stable and responding on port 3000
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implementar transparência do processo seletivo para o candidato no portal
+
+Work Log:
+- Adicionado modelo CandidateStageHistory ao Prisma schema para rastrear mudanças de fase com timestamps
+- Push do schema para o banco (db push + generate)
+- Atualizado API /api/candidates/[id]/stage para registrar mudanças de fase no histórico automaticamente via transaction
+- Reescrito API /api/portal/applications com timeline rica: pipeline stages, stage history, interview events, DISC test events, progress percentage
+- Atualizado API /api/portal/verify para incluir timeline completa na resposta inicial (applications com timeline, statusHistory, progress)
+- Reescrito application-status.tsx (~1070 linhas) em pt-BR com design premium:
+  - Pipeline stepper horizontal (desktop) e vertical (mobile) com animações framer-motion
+  - Barra de progresso animada
+  - Timeline de histórico de atualizações com ícones coloridos por tipo (STAGE_CHANGE, INTERVIEW, DISC_TEST, STATUS_CHANGE)
+  - Card de celebração HiredCelebrationCard com partículas sparkle
+  - Card de rejeição RejectionCard com mensagem gentil
+  - MatchScoreRing SVG animado
+  - Filtros (Todas, Em Andamento, Finalizadas)
+  - Grid de info rápida (Etapa Atual, Modelo, Tipo, Salário)
+  - Botões de ação (Realizar Teste DISC, Ver Entrevista)
+  - Skeleton loading, empty state
+- Reescrito portal-dashboard.tsx (~705 linhas) 100% em pt-BR:
+  - Header glassmorphism com "Portal do Candidato"
+  - 5 abas pt-BR (Visão Geral, Candidaturas, Entrevistas, Mensagens, Meu Perfil)
+  - KPI cards animados (Total Candidaturas, Entrevistas Agendadas, Status Atual, Perfil Completo)
+  - Candidaturas ativas, próximas entrevistas, ações rápidas
+  - Integração com novo ApplicationStatus
+- Traduzido portal-auth.tsx (~293 linhas) para pt-BR:
+  - Tema emerald/teal substituindo blue/indigo
+  - Animações framer-motion (spring, fade, slide)
+  - Background orbs decorativos
+  - Branding "Powered by Zion Recruit"
+- Todos os labels de status em pt-BR (10 status de candidato, 7 de entrevista, 5 de DISC, 8 tipos de entrevista)
+
+Stage Summary:
+- Candidato agora acompanha todo o processo: fases, estágio atual, quando avança, aprovação e rejeição
+- Modelo CandidateStageHistory registra automaticamente cada mudança de fase via API de stage
+- Portal 100% pt-BR com design premium usando shadcn/ui + framer-motion + Tailwind
+- 0 erros de lint nos novos arquivos
+- Build de produção compilou com sucesso
