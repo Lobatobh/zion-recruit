@@ -19,6 +19,15 @@ import {
   Zap,
   AlertTriangle,
   RefreshCw,
+  Copy,
+  ExternalLink,
+  Phone,
+  FileText,
+  Calendar,
+  Banknote,
+  Hash,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -32,6 +41,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -53,6 +72,38 @@ import { TimelineView } from "./client-timeline";
 import { AddContactDialog, SendUpdateDialog, CreateClientDialog } from "./client-dialogs";
 
 // ============================================
+// HELPERS
+// ============================================
+
+function formatCnpj(value: string): string {
+  const d = value.replace(/\D/g, "");
+  if (d.length <= 2) return d;
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
+function InfoRow({ icon: Icon, label, value, actions }: { icon: React.ElementType; label: string; value?: string | null; actions?: React.ReactNode }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center gap-2.5 py-1.5 group">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+      <span className="text-xs text-muted-foreground min-w-[80px] flex-shrink-0">{label}</span>
+      <span className="text-xs font-medium text-foreground flex-1 truncate">{value}</span>
+      {actions && <div className="opacity-0 group-hover:opacity-100 transition-opacity">{actions}</div>}
+    </div>
+  );
+}
+
+function copyToClipboard(text: string, label: string) {
+  navigator.clipboard.writeText(text.replace(/\D/g, "")).then(
+    () => toast.success(`${label} copiado!`),
+    () => toast.error("Erro ao copiar")
+  );
+}
+
+// ============================================
 // SUB-COMPONENT: ClientDetailDialog
 // ============================================
 
@@ -72,6 +123,8 @@ export function ClientDetailDialog({
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [sendUpdateOpen, setSendUpdateOpen] = useState(false);
   const [editClientOpen, setEditClientOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
 
@@ -146,6 +199,22 @@ export function ClientDetailDialog({
     }
   };
 
+  const handleDeleteClient = async () => {
+    if (!clientId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Erro ao excluir empresa");
+      toast.success("Empresa excluída com sucesso!");
+      setDeleteDialogOpen(false);
+      onOpenChange(false);
+    } catch {
+      toast.error("Erro ao excluir empresa. Verifique se existem vagas vinculadas.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const stats = client?.stats || {
     totalJobs: 0,
     activeJobs: 0,
@@ -153,6 +222,10 @@ export function ClientDetailDialog({
     contactsCount: 0,
     notificationsSent: 0,
   };
+
+  const fullAddress = [client?.street, client?.number, client?.complement, client?.neighborhood, client?.city, client?.state]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <>
@@ -195,18 +268,25 @@ export function ClientDetailDialog({
                   </div>
                   <div className="flex-1 min-w-0">
                     <h2 className="text-xl font-bold truncate">{client.name}</h2>
-                    {client.industry && (
-                      <p className="text-white/80 text-sm">{client.industry}</p>
-                    )}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {client.industry && (
+                        <p className="text-white/80 text-sm">{client.industry}</p>
+                      )}
+                      {client.cnpj && (
+                        <Badge className="text-[9px] px-1.5 py-0 bg-white/20 text-white border-white/30 hover:bg-white/30">
+                          {formatCnpj(client.cnpj)}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       className="text-white/80 hover:text-white hover:bg-white/10"
                       onClick={() => setEditClientOpen(true)}
                     >
-                      <Edit3 className="h-4 w-4 mr-1.5" />
+                      <Edit3 className="h-4 w-4 mr-1" />
                       Editar
                     </Button>
                     <Button
@@ -215,8 +295,17 @@ export function ClientDetailDialog({
                       className="text-white/80 hover:text-white hover:bg-white/10"
                       onClick={() => setSendUpdateOpen(true)}
                     >
-                      <Send className="h-4 w-4 mr-1.5" />
+                      <Send className="h-4 w-4 mr-1" />
                       Enviar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-200 hover:text-red-100 hover:bg-red-500/30"
+                      onClick={() => setDeleteDialogOpen(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Excluir
                     </Button>
                   </div>
                 </div>
@@ -256,7 +345,7 @@ export function ClientDetailDialog({
 
                 <TabsContent value="overview" className="flex-1 overflow-auto mt-4 px-6 pb-6">
                   <div className="grid gap-5">
-                    {/* Company Info */}
+                    {/* Company Info - Complete */}
                     <Card className="border-dashed">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm flex items-center gap-2">
@@ -264,23 +353,98 @@ export function ClientDetailDialog({
                           Informações da Empresa
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="grid gap-2 text-sm">
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                          {client.website && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Globe className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span className="truncate">{client.website}</span>
-                            </div>
-                          )}
-                          {client.address && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span className="truncate">{client.address}</span>
-                            </div>
-                          )}
+                      <CardContent className="space-y-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                          <InfoRow
+                            icon={Hash}
+                            label="CNPJ"
+                            value={client.cnpj ? formatCnpj(client.cnpj) : undefined}
+                            actions={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => copyToClipboard(client.cnpj!, "CNPJ")}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            }
+                          />
+                          <InfoRow
+                            icon={Building2}
+                            label="Nome Fantasia"
+                            value={client.tradeName}
+                          />
+                          <InfoRow
+                            icon={FileText}
+                            label="Natureza Jurídica"
+                            value={client.legalNature}
+                          />
+                          <InfoRow
+                            icon={Building2}
+                            label="Porte"
+                            value={client.companySize}
+                          />
+                          <InfoRow
+                            icon={Banknote}
+                            label="Capital Social"
+                            value={client.shareCapital}
+                          />
+                          <InfoRow
+                            icon={Calendar}
+                            label="Abertura"
+                            value={client.foundingDate}
+                          />
+                          <InfoRow
+                            icon={Briefcase}
+                            label="Atividade"
+                            value={client.mainActivity}
+                          />
+                          <InfoRow
+                            icon={CheckCircle2}
+                            label="Situação"
+                            value={client.status}
+                          />
+                          <InfoRow
+                            icon={Mail}
+                            label="Email"
+                            value={client.companyEmail}
+                          />
+                          <InfoRow
+                            icon={Phone}
+                            label="Telefone"
+                            value={client.companyPhone}
+                          />
+                          <InfoRow
+                            icon={Globe}
+                            label="Website"
+                            value={client.website}
+                            actions={
+                              client.website && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => {
+                                    const url = client.website!.startsWith("http")
+                                      ? client.website!
+                                      : `https://${client.website}`;
+                                    window.open(url, "_blank");
+                                  }}
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </Button>
+                              )
+                            }
+                          />
+                          <InfoRow
+                            icon={MapPin}
+                            label="Endereço"
+                            value={fullAddress || client.address}
+                          />
                         </div>
                         {client.notes && (
-                          <div className="mt-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+                          <div className="mt-3 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
                             {client.notes}
                           </div>
                         )}
@@ -501,6 +665,46 @@ export function ClientDetailDialog({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Excluir Empresa
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{client?.name}</strong>?
+              <br />
+              Esta ação não pode ser desfeita. Todos os dados associados serão perdidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteClient();
+              }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600 text-white"
+            >
+              {deleting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Sim, Excluir
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Sub dialogs */}
       <AddContactDialog
