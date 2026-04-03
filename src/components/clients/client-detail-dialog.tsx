@@ -29,7 +29,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -154,6 +157,11 @@ export function ClientDetailDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader>
+            <VisuallyHidden>
+              <DialogTitle>{client?.name || "Detalhes da Empresa"}</DialogTitle>
+            </VisuallyHidden>
+          </DialogHeader>
           {loading ? (
             <div className="p-6 space-y-4">
               <Skeleton className="h-6 w-48" />
