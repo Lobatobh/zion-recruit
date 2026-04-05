@@ -92,10 +92,10 @@ export function ClientManagementPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
+    <div className="min-h-screen bg-background">
       {/* Sticky Gradient Header */}
       <div className="sticky top-0 z-40">
-        <div className="bg-gradient-to-r from-teal-600 via-emerald-600 to-green-600">
+        <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600">
           <div className="px-4 lg:px-8 py-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -119,7 +119,7 @@ export function ClientManagementPage() {
                     className={cn(
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
                       viewMode === "list"
-                        ? "bg-white text-teal-700 shadow-sm"
+                        ? "bg-white text-violet-700 shadow-sm"
                         : "text-white/80 hover:text-white"
                     )}
                   >
@@ -131,7 +131,7 @@ export function ClientManagementPage() {
                     className={cn(
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
                       viewMode === "timeline"
-                        ? "bg-white text-teal-700 shadow-sm"
+                        ? "bg-white text-violet-700 shadow-sm"
                         : "text-white/80 hover:text-white"
                     )}
                   >
@@ -145,7 +145,7 @@ export function ClientManagementPage() {
                     setEditingClient(null);
                     setCreateDialogOpen(true);
                   }}
-                  className="bg-white text-teal-700 hover:bg-white/90 font-medium shadow-sm"
+                  className="bg-white text-violet-700 hover:bg-white/90 font-medium shadow-sm"
                 >
                   <Plus className="h-4 w-4 mr-1.5" />
                   <span className="hidden sm:inline">Nova Empresa</span>
@@ -157,14 +157,14 @@ export function ClientManagementPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="bg-white border-b shadow-sm px-4 lg:px-8 py-3">
+        <div className="bg-card border-b shadow-sm px-4 lg:px-8 py-3">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar empresas por nome, segmento ou contato..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9 bg-gray-50 border-gray-200 focus-visible:ring-teal-500/20"
+              className="pl-9 h-9 bg-muted border-border focus-visible:ring-violet-500/20"
             />
           </div>
         </div>
@@ -183,7 +183,7 @@ export function ClientManagementPage() {
             title="Total de Empresas"
             value={stats.totalCompanies}
             icon={Building2}
-            accentColor="teal"
+            accentColor="violet"
             index={0}
           />
           <StatsCard
@@ -214,7 +214,7 @@ export function ClientManagementPage() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-xl border bg-white/80 p-5 space-y-4">
+              <div key={i} className="rounded-xl border bg-card p-5 space-y-4">
                 <div className="flex items-start gap-3">
                   <Skeleton className="h-11 w-11 rounded-full flex-shrink-0" />
                   <div className="flex-1 space-y-2">
@@ -279,7 +279,7 @@ export function ClientManagementPage() {
                           setEditingClient(null);
                           setCreateDialogOpen(true);
                         }}
-                        className="bg-gradient-to-r from-teal-600 to-emerald-600 text-white gap-2"
+                        className="bg-gradient-to-r from-violet-600 to-purple-600 text-white gap-2"
                       >
                         <Plus className="h-4 w-4" />
                         Nova Empresa

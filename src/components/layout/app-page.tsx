@@ -454,6 +454,21 @@ const LazyPortalAuth = lazy(() =>
 const LazyPortalDashboard = lazy(() =>
   import("@/components/portal/portal-dashboard").then((m) => ({ default: m.PortalDashboard }))
 );
+const LazyInterviewsPage = lazy(() =>
+  import("@/components/interviews/interviews-page").then((m) => ({ default: m.InterviewsPage }))
+);
+const LazyCampaignsPage = lazy(() =>
+  import("@/components/campaigns/campaigns-dashboard").then((m) => ({ default: m.CampaignsDashboard }))
+);
+const LazyCalendarPage = lazy(() =>
+  import("@/components/calendar/calendar-page").then((m) => ({ default: m.CalendarPage }))
+);
+const LazyReferralsPage = lazy(() =>
+  import("@/components/referrals/referrals-page").then((m) => ({ default: m.ReferralsPage }))
+);
+const LazyTemplatesPage = lazy(() =>
+  import("@/components/templates/templates-page").then((m) => ({ default: m.TemplatesPage }))
+);
 
 // ============================================
 // LAZY VIEW RENDERER (with Suspense + ErrorBoundary)
@@ -692,6 +707,41 @@ function DashboardContent({ user, onSignOut }: { user: SessionUser; onSignOut: (
         return (
           <LazyView>
             <LazyJobBoard />
+          </LazyView>
+        );
+
+      case "interviews":
+        return (
+          <LazyView>
+            <LazyInterviewsPage />
+          </LazyView>
+        );
+
+      case "campaigns":
+        return (
+          <LazyView>
+            <LazyCampaignsPage />
+          </LazyView>
+        );
+
+      case "calendar":
+        return (
+          <LazyView>
+            <LazyCalendarPage />
+          </LazyView>
+        );
+
+      case "referrals":
+        return (
+          <LazyView>
+            <LazyReferralsPage />
+          </LazyView>
+        );
+
+      case "templates":
+        return (
+          <LazyView>
+            <LazyTemplatesPage />
           </LazyView>
         );
 
