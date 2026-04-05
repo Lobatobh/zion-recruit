@@ -39,6 +39,8 @@ import {
   WifiOff,
   Zap,
   MessageSquare,
+  ShieldCheck,
+  HandMetal,
 } from "lucide-react";
 import { useMessagingStore } from "@/stores/messaging-store";
 import { usePipelineStore } from "@/stores/pipeline-store";
@@ -194,6 +196,7 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [showVideoDialog, setShowVideoDialog] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [isTakingOver, setIsTakingOver] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -251,6 +254,36 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
       );
     } catch (error) {
       toast.error("Falha ao alterar modo IA");
+    }
+  };
+
+  const handleTakeOver = async () => {
+    if (!conversation || isTakingOver) return;
+    setIsTakingOver(true);
+    try {
+      // 1. Disable AI mode
+      await toggleAiMode(conversation.id, false);
+      // 2. Send a system message indicating takeover
+      await sendMessage({
+        conversationId: conversation.id,
+        content: "🎯 *Recrutador assumiu a conversa*",
+        contentType: "TEXT" as any,
+      }).catch(() => {});
+      toast.success("Você assumiu a conversa! A IA está pausada.");
+    } catch (error) {
+      toast.error("Falha ao assumir conversa");
+    } finally {
+      setIsTakingOver(false);
+    }
+  };
+
+  const handleReactivateAI = async () => {
+    if (!conversation) return;
+    try {
+      await toggleAiMode(conversation.id, true);
+      toast.success("IA reativada! A Zoe voltou a controlar a conversa.");
+    } catch (error) {
+      toast.error("Falha ao reativar IA");
     }
   };
 
@@ -597,17 +630,104 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
         </div>
       </div>
 
+      {/* AI Control Banner - Show when AI is driving the conversation */}
+      {conversation.aiMode && !conversation.needsIntervention && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="px-4 py-2.5 bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 border-b border-violet-500/20"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-sm">
+              <div className="relative">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600">
+                  <Bot className="h-4 w-4 text-white" />
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
+              </div>
+              <div>
+                <span className="font-medium text-violet-700 dark:text-violet-400">
+                  Zoe (IA) está controlando esta conversa
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  A IA está conversando com o candidato automaticamente
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-sm"
+              onClick={handleTakeOver}
+              disabled={isTakingOver}
+            >
+              {isTakingOver ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <HandMetal className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Assumir Conversa
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Human Control Banner - Show when recruiter took over */}
+      {!conversation.aiMode && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="px-4 py-2.5 bg-emerald-500/5 border-b border-emerald-500/20"
+        >
+          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 text-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div>
+                <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                  Você está no controle
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  A IA está pausada. Você está respondendo diretamente.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-violet-600 border-violet-500/30 hover:bg-violet-500/10"
+              onClick={handleReactivateAI}
+            >
+              <Bot className="h-3.5 w-3.5 mr-1.5" />
+              Reativar IA
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
       {/* Intervention Banner */}
       {conversation.needsIntervention && (
-        <div className="px-4 py-2 bg-destructive/10 border-b border-destructive/20">
-          <div className="flex items-center gap-2 text-sm">
-            <AlertCircle className="h-4 w-4 text-destructive" />
-            <span className="text-destructive font-medium">
-              Intervenção necessária:
-            </span>
-            <span className="text-muted-foreground">
-              {conversation.interventionReason || "Aguardando análise"}
-            </span>
+        <div className="px-4 py-2.5 bg-destructive/10 border-b border-destructive/20">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-sm">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <span className="text-destructive font-medium">
+                Intervenção necessária:
+              </span>
+              <span className="text-muted-foreground">
+                {conversation.interventionReason || "Aguardando análise"}
+              </span>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleTakeOver}
+              disabled={isTakingOver}
+            >
+              {isTakingOver ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <HandMetal className="h-3.5 w-3.5 mr-1.5" />}
+              Assumir Agora
+            </Button>
           </div>
         </div>
       )}
@@ -639,28 +759,72 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
             <p className="text-sm text-muted-foreground mt-1">
               Envie a primeira mensagem para iniciar a conversa
             </p>
-            {conversation.aiMode && (
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={async () => {
-                  try {
-                    await fetch(`/api/messages/conversations/${conversation.id}/ai-process`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ startScreening: true }),
-                    });
-                    toast.success("Triagem IA iniciada");
-                    fetchMessages(conversation.id);
-                  } catch {
-                    toast.error("Falha ao iniciar triagem IA");
-                  }
-                }}
-              >
-                <Zap className="h-4 w-4 mr-2" />
-                Iniciar triagem com IA
-              </Button>
-            )}
+            <div className="flex flex-col items-center gap-2 mt-4">
+              {conversation.aiMode && (
+                <Button
+                  className="bg-gradient-to-r from-violet-600 to-purple-600 hover:opacity-90 text-white"
+                  onClick={async () => {
+                    try {
+                      await fetch(`/api/messages/conversations/${conversation.id}/ai-process`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ startScreening: true }),
+                      });
+                      toast.success("Triagem IA iniciada");
+                      fetchMessages(conversation.id);
+                    } catch {
+                      toast.error("Falha ao iniciar triagem IA");
+                    }
+                  }}
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  Iniciar triagem com IA
+                </Button>
+              )}
+              {/* Demo: Simulate candidate reply to test AI auto-response */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-xs text-muted-foreground">
+                    <Bot className="h-3 w-3 mr-1" />
+                    Simular resposta do candidato
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3" align="center">
+                  <p className="text-sm font-medium mb-2">Simular resposta do candidato</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    A IA vai responder automaticamente se estiver ativa
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {["Olá, tenho interesse na vaga!", "Sim, estou disponível para começar amanhã.", "Minha pretensão é R$ 8.000.", "Não tenho interesse no momento, obrigado."].map((msg) => (
+                      <Button
+                        key={msg}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs justify-start text-left"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`/api/messages/conversations/${conversation.id}/candidate-reply`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ message: msg }),
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              toast.success(conversation.aiMode ? "IA respondeu automaticamente" : "Resposta do candidato registrada");
+                              fetchMessages(conversation.id);
+                            }
+                          } catch {
+                            toast.error("Falha ao simular resposta");
+                          }
+                        }}
+                      >
+                        {msg}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">

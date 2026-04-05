@@ -7,7 +7,8 @@ import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
 import { SenderType, ContentType, ChannelType, MessageStatus, ConversationStatus } from "@prisma/client";
 
-const DEMO_TENANT_ID = "cmmxleln70000px3a43u36vum";
+// Default tenant (fallback - actual tenant should come from session)
+const DEFAULT_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
 
 // AI Stages for screening flow
 const AI_STAGES = {

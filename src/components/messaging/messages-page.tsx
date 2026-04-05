@@ -310,6 +310,7 @@ function CampaignsTab() {
   const [newTone, setNewTone] = useState("friendly");
   const [newAutoSchedule, setNewAutoSchedule] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isExecuting, setIsExecuting] = useState<string | null>(null);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -375,6 +376,21 @@ function CampaignsTab() {
       fetchCampaigns();
     } catch {
       toast.error("Falha ao remover campanha");
+    }
+  };
+
+  const handleExecuteCampaign = async (campaignId: string, campaignName: string) => {
+    setIsExecuting(campaignId);
+    try {
+      const res = await fetch(`/api/messages/campaigns/${campaignId}/execute`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      toast.success(`Campanha "${campaignName}" executada! ${data.contacted || 0} candidatos contactados pela IA.`);
+      fetchCampaigns();
+    } catch {
+      toast.error("Falha ao executar campanha. Verifique se há candidatos disponíveis.");
+    } finally {
+      setIsExecuting(null);
     }
   };
 
@@ -502,6 +518,11 @@ function CampaignsTab() {
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateCampaign(campaign); }}>
                                 <Copy className="h-4 w-4 mr-2" /> Duplicar
                               </DropdownMenuItem>
+                              {(campaign.status === "DRAFT" || campaign.status === "PAUSED") && (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExecuteCampaign(campaign.id, campaign.name); }}>
+                                  {isExecuting === campaign.id ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Executando...</> : <><Sparkles className="h-4 w-4 mr-2" /> Executar Campanha</>}
+                                </DropdownMenuItem>
+                              )}
                               {(campaign.status === "ACTIVE" || campaign.status === "PAUSED" || campaign.status === "DRAFT") && (
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleToggleCampaign(campaign.id); }}>
                                   {campaign.status === "ACTIVE" ? <><Pause className="h-4 w-4 mr-2" /> Pausar</> : <><Play className="h-4 w-4 mr-2" /> Iniciar</>}
