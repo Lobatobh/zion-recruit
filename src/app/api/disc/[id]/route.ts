@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { DISCStatus } from '@prisma/client';
 import { DISC_QUESTIONS } from '@/lib/disc/questions';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
 // ============================================
 // GET /api/disc/[id] - Get DISC Test
@@ -17,10 +18,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
 
-    const test = await db.dISTest.findUnique({
-      where: { id },
+    const test = await db.dISTest.findFirst({
+      where: { id, tenantId },
       include: {
         candidate: {
           select: {
@@ -57,11 +60,7 @@ export async function GET(
 
     return NextResponse.json({ test: response });
   } catch (error) {
-    console.error('Error fetching DISC test:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch DISC test' },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
@@ -74,12 +73,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
     const body = await request.json();
     const { status, answers } = body;
 
-    const test = await db.dISTest.findUnique({
-      where: { id },
+    // Verify test belongs to tenant
+    const test = await db.dISTest.findFirst({
+      where: { id, tenantId },
     });
 
     if (!test) {
@@ -140,11 +142,7 @@ export async function PUT(
 
     return NextResponse.json({ test });
   } catch (error) {
-    console.error('Error updating DISC test:', error);
-    return NextResponse.json(
-      { error: 'Failed to update DISC test' },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
@@ -157,7 +155,21 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
+
+    // Verify test belongs to tenant
+    const test = await db.dISTest.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!test) {
+      return NextResponse.json(
+        { error: 'DISC test not found' },
+        { status: 404 }
+      );
+    }
 
     // Delete answers first (cascade should handle this, but being explicit)
     await db.dISCAnswer.deleteMany({
@@ -171,10 +183,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting DISC test:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete DISC test' },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

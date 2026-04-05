@@ -26,7 +26,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { answers } = body;
+    const { answers, token } = body;
 
     // Get test
     const test = await db.dISTest.findUnique({
@@ -52,6 +52,31 @@ export async function POST(
         { error: 'Test already completed' },
         { status: 400 }
       );
+    }
+
+    // Verify test token for candidate portal security
+    if (test.token && test.token !== token) {
+      return NextResponse.json(
+        { error: 'Token de acesso inválido' },
+        { status: 403 }
+      );
+    }
+
+    // Verify test has not expired (check expiresAt or sentAt + 7 days)
+    if (test.expiresAt && new Date() > test.expiresAt) {
+      return NextResponse.json(
+        { error: 'Teste expirado. Solicite um novo link.' },
+        { status: 410 }
+      );
+    }
+    if (!test.expiresAt && test.sentAt) {
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      if (new Date().getTime() - test.sentAt.getTime() > sevenDaysMs) {
+        return NextResponse.json(
+          { error: 'Teste expirado. Solicite um novo link.' },
+          { status: 410 }
+        );
+      }
     }
 
     // Validate answers
@@ -149,9 +174,6 @@ export async function POST(
     });
   } catch (error) {
     console.error('Error submitting DISC test:', error);
-    return NextResponse.json(
-      { error: 'Failed to submit DISC test' },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

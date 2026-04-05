@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 // GET /api/candidates/[id]/profile - Get complete candidate profile
 export async function GET(
@@ -7,11 +8,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
     const { id } = await params
 
-    // Get candidate with all relations
-    const candidate = await db.candidate.findUnique({
-      where: { id },
+    // Get candidate with all relations (scoped to tenant)
+    const candidate = await db.candidate.findFirst({
+      where: { id, tenantId },
       include: {
         job: {
           select: {
@@ -172,10 +175,6 @@ export async function GET(
 
     return NextResponse.json(profile)
   } catch (error) {
-    console.error('Error fetching candidate profile:', error)
-    return NextResponse.json(
-      { error: 'Erro ao carregar perfil do candidato' },
-      { status: 500 }
-    )
+    return authErrorResponse(error)
   }
 }

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { DISCStatus } from '@prisma/client';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
 // ============================================
 // GET /api/disc - List DISC Tests
@@ -13,15 +14,16 @@ import { DISCStatus } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const { searchParams } = new URL(request.url);
     const candidateId = searchParams.get('candidateId');
-    const tenantId = searchParams.get('tenantId');
     const status = searchParams.get('status') as DISCStatus | null;
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { tenantId };
 
     if (candidateId) where.candidateId = candidateId;
-    if (tenantId) where.tenantId = tenantId;
     if (status) where.status = status;
 
     const tests = await db.dISCTest.findMany({
@@ -53,11 +55,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ tests });
   } catch (error) {
-    console.error('Error fetching DISC tests:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch DISC tests' },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
@@ -67,19 +65,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { candidateId, tenantId } = body;
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
-    if (!candidateId || !tenantId) {
+    const body = await request.json();
+    const { candidateId } = body;
+
+    if (!candidateId) {
       return NextResponse.json(
-        { error: 'candidateId and tenantId are required' },
+        { error: 'candidateId is required' },
         { status: 400 }
       );
     }
 
-    // Check if candidate exists
-    const candidate = await db.candidate.findUnique({
-      where: { id: candidateId },
+    // Check if candidate exists and belongs to tenant
+    const candidate = await db.candidate.findFirst({
+      where: { id: candidateId, tenantId },
       include: { job: true },
     });
 
@@ -121,10 +122,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ test }, { status: 201 });
   } catch (error) {
-    console.error('Error creating DISC test:', error);
-    return NextResponse.json(
-      { error: 'Failed to create DISC test' },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
