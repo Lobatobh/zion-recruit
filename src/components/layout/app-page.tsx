@@ -33,7 +33,6 @@ import {
   Video,
   CalendarDays,
   FileText,
-  Megaphone,
   Handshake,
 } from "lucide-react";
 import { z } from "zod";
@@ -103,7 +102,6 @@ type ViewType =
   | "portal-disc-test"
   | "calendar"
   | "interviews"
-  | "campaigns"
   | "referrals"
   | "templates";
 
@@ -457,9 +455,6 @@ const LazyPortalDashboard = lazy(() =>
 const LazyInterviewsPage = lazy(() =>
   import("@/components/interviews/interviews-page").then((m) => ({ default: m.InterviewsPage }))
 );
-const LazyCampaignsPage = lazy(() =>
-  import("@/components/campaigns/campaigns-dashboard").then((m) => ({ default: m.CampaignsDashboard }))
-);
 const LazyCalendarPage = lazy(() =>
   import("@/components/calendar/calendar-page").then((m) => ({ default: m.CalendarPage }))
 );
@@ -528,7 +523,6 @@ function DashboardContent({ user, onSignOut }: { user: SessionUser; onSignOut: (
       items: [
         { name: "Hunter AI", view: "sourcing", icon: Crosshair },
         { name: "Agentes IA", view: "agents", icon: Bot },
-        { name: "Campanhas IA", view: "campaigns", icon: Megaphone },
         { name: "Brain Test", view: "disc", icon: Brain },
       ],
     },
@@ -714,13 +708,6 @@ function DashboardContent({ user, onSignOut }: { user: SessionUser; onSignOut: (
         return (
           <LazyView>
             <LazyInterviewsPage />
-          </LazyView>
-        );
-
-      case "campaigns":
-        return (
-          <LazyView>
-            <LazyCampaignsPage />
           </LazyView>
         );
 
