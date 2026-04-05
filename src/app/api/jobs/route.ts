@@ -1,10 +1,12 @@
 /**
  * Jobs API - Create Job
  * POST /api/jobs - Create a new background job
+ * GET /api/jobs - List background jobs
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getQueue, JobType, JobPriority, JobStatus } from '@/lib/queue'
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 interface CreateJobRequest {
   type: JobType
@@ -24,6 +26,9 @@ interface CreateJobRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
+
     const body: CreateJobRequest = await request.json()
 
     // Validate required fields
@@ -53,17 +58,17 @@ export async function POST(request: NextRequest) {
     // Generate job name if not provided
     const jobName = body.name || generateJobName(body.type, body.input as Record<string, unknown>)
 
-    // Create job
+    // Create job - force session tenantId instead of accepting from body
     const job = await queue.createJob(
       body.type,
       jobName,
       body.input as Record<string, unknown>,
       {
         priority: body.options?.priority || JobPriority.NORMAL,
-        runAt: body.options?.runAt ? new Date(body.options.runAt) : undefined,
+        runAt: body.options?.runAt ? new Date(body.options?.runAt) : undefined,
         maxAttempts: body.options?.maxAttempts,
-        tenantId: body.options?.tenantId,
-        createdBy: body.options?.createdBy,
+        tenantId, // Always use session tenantId, never from client body
+        createdBy: user.id,
         relatedType: body.options?.relatedType,
         relatedId: body.options?.relatedId,
         description: body.options?.description,
@@ -83,20 +88,18 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Error creating job:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create job' },
-      { status: 500 }
-    )
+    return authErrorResponse(error)
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const type = searchParams.get('type')
-    const tenantId = searchParams.get('tenantId')
     const relatedType = searchParams.get('relatedType')
     const relatedId = searchParams.get('relatedId')
     const limit = parseInt(searchParams.get('limit') || '50', 10)
@@ -104,10 +107,11 @@ export async function GET(request: NextRequest) {
 
     const queue = getQueue()
 
+    // Force tenantId from session - ignore any query param
     const jobs = await queue.getJobs({
       status: status ? status.split(',') as JobStatus[] : undefined,
       type: type ? type.split(',') as JobType[] : undefined,
-      tenantId: tenantId || undefined,
+      tenantId,
       relatedType: relatedType || undefined,
       relatedId: relatedId || undefined,
       limit,
@@ -148,11 +152,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Error fetching jobs:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch jobs' },
-      { status: 500 }
-    )
+    return authErrorResponse(error)
   }
 }
 

@@ -5,12 +5,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getQueue } from '@/lib/queue'
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
     const { id } = await params
 
     if (!id) {
@@ -24,6 +27,14 @@ export async function GET(
     const job = await queue.getJob(id)
 
     if (!job) {
+      return NextResponse.json(
+        { error: 'Job not found' },
+        { status: 404 }
+      )
+    }
+
+    // Verify tenant ownership
+    if (job.tenantId !== tenantId) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
@@ -62,10 +73,6 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error fetching job:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch job' },
-      { status: 500 }
-    )
+    return authErrorResponse(error)
   }
 }

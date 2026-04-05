@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTenantSubscription, getSubscriptionWithStripeData, listCustomerInvoices } from '@/lib/stripe/subscriptions';
 import { getStripeCustomer } from '@/lib/stripe/customer';
 import { stripe } from '@/lib/stripe/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 import { db } from '@/lib/db';
 
 /**
@@ -12,39 +11,8 @@ import { db } from '@/lib/db';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized', success: false },
-        { status: 401 }
-      );
-    }
-
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: 'tenantId is required', success: false },
-        { status: 400 }
-      );
-    }
-
-    // Verify user has access to this tenant
-    const membership = await db.tenantMember.findFirst({
-      where: {
-        tenantId,
-        userId: session.user.id,
-      },
-    });
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: 'Access denied', success: false },
-        { status: 403 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     // Get tenant
     const tenant = await db.tenant.findUnique({
@@ -130,10 +98,6 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error('Error fetching subscription:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch subscription', success: false },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

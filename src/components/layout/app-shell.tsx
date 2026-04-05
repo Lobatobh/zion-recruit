@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Home,
@@ -26,8 +26,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useAuthStore } from "@/stores/auth-store";
-import { useRouter } from "next/navigation";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -39,6 +38,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -114,6 +123,8 @@ function Sidebar({
   className?: string;
   currentView: ViewType;
 }) {
+  const { data: session } = useSession();
+
   return (
     <div
       className={cn(
@@ -169,7 +180,7 @@ function Sidebar({
         <div className="border-t border-sidebar-border p-4">
           <div className="rounded-lg bg-muted/50 p-3">
             <p className="text-xs text-muted-foreground">Plano Atual</p>
-            <p className="text-sm font-medium">Professional</p>
+            <p className="text-sm font-medium truncate">{session?.user?.tenantSlug || 'Zion Recruit'}</p>
           </div>
         </div>
       )}
@@ -180,6 +191,7 @@ function Sidebar({
 function TenantSwitcher() {
   const { data: session, update: updateSession } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [organizations, setOrganizations] = useState<Array<{
     id: string;
     name: string;
@@ -190,6 +202,7 @@ function TenantSwitcher() {
   }>>([]);
   const [loading, setLoading] = useState(false);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // Fetch user's organizations on mount
   useEffect(() => {
@@ -221,13 +234,14 @@ function TenantSwitcher() {
       if (res.ok) {
         // Update NextAuth session with new tenant (no page reload needed)
         await updateSession({ switchTenant: tenantId });
+        router.refresh();
       }
     } catch {
       // Error switching - do nothing
     } finally {
       setSwitching(null);
     }
-  }, [session?.user?.tenantId, router, updateSession]);
+  }, [session?.user?.tenantId, router, pathname, updateSession]);
 
   const currentSlug = session?.user?.tenantSlug || "Sem Organização";
   const currentOrgId = session?.user?.tenantId;
@@ -279,7 +293,26 @@ function TenantSwitcher() {
             <span className="text-sm text-muted-foreground">Nenhuma organização</span>
           </DropdownMenuItem>
         )}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => setCreateDialogOpen(true)}
+          className="flex items-center gap-2 cursor-pointer text-primary"
+        >
+          <Plus className="h-4 w-4" />
+          <span className="text-sm font-medium">Nova Organização</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
+
+      {/* Create Organization Dialog */}
+      <CreateOrganizationDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreated={(tenantId) => {
+          setCreateDialogOpen(false);
+          handleSwitch(tenantId);
+        }}
+      />
     </DropdownMenu>
   );
 }
@@ -484,5 +517,133 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <Suspense fallback={<AppShellFallback />}>
       <AppShellContent>{children}</AppShellContent>
     </Suspense>
+  );
+}
+
+// ============================================
+// Create Organization Dialog
+// ============================================
+
+function CreateOrganizationDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (tenantId: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    // Auto-generate slug from name
+    const generated = value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 63);
+    setSlug(generated);
+  };
+
+  const handleSubmit = async () => {
+    setError("");
+    if (!name.trim() || !slug.trim()) {
+      setError("Nome e identificador são obrigatórios");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/tenant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), slug: slug.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Erro ao criar organização");
+        return;
+      }
+
+      onCreated(data.tenant.id);
+      setName("");
+      setSlug("");
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nova Organização</DialogTitle>
+          <DialogDescription>
+            Crie uma nova organização para gerenciar suas vagas e candidatos separadamente.
+            Você será o proprietário desta organização.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="org-name">Nome da Organização</Label>
+            <Input
+              id="org-name"
+              placeholder="Ex: TechCorp Recrutamento"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="org-slug">Identificador</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">zion.app/</span>
+              <Input
+                id="org-slug"
+                placeholder="techcorp-recrutamento"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                className="flex-1"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Usado na URL. Apenas letras minúsculas, números e hífens.
+            </p>
+          </div>
+
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+
+          <div className="rounded-lg border bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">
+              Plano inicial: <span className="font-medium text-foreground">Gratuito</span>
+              {" · "}Até 10 vagas, 5 membros e 500 candidatos
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !slug.trim()}>
+            {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Criar Organização
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

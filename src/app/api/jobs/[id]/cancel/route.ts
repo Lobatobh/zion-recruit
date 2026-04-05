@@ -5,12 +5,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getQueue, JobError } from '@/lib/queue'
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
     const { id } = await params
 
     if (!id) {
@@ -21,14 +24,25 @@ export async function POST(
     }
 
     const queue = getQueue()
-    const job = await queue.cancelJob(id)
 
-    if (!job) {
+    // Fetch job first to verify tenant ownership
+    const existingJob = await queue.getJob(id)
+    if (!existingJob) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
       )
     }
+
+    // Verify tenant ownership before cancel
+    if (existingJob.tenantId !== tenantId) {
+      return NextResponse.json(
+        { error: 'Job not found' },
+        { status: 404 }
+      )
+    }
+
+    const job = await queue.cancelJob(id)
 
     return NextResponse.json({
       success: true,
@@ -41,8 +55,6 @@ export async function POST(
       },
     })
   } catch (error) {
-    console.error('Error cancelling job:', error)
-    
     if (error instanceof JobError) {
       return NextResponse.json(
         { error: error.message, code: error.code },
@@ -50,9 +62,6 @@ export async function POST(
       )
     }
 
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to cancel job' },
-      { status: 500 }
-    )
+    return authErrorResponse(error)
   }
 }

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 
 interface BulkActionBody {
   action: "archive" | "delete" | "publish" | "close" | "restore";
@@ -13,6 +14,9 @@ interface BulkActionBody {
 
 export async function POST(request: NextRequest) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const body: BulkActionBody = await request.json();
     const { action, ids } = body;
 
@@ -35,20 +39,20 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case "archive":
         updatedCount = await db.job.updateMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, tenantId },
           data: { status: "ARCHIVED" },
         }).then((r) => r.count);
         break;
 
       case "delete":
         updatedCount = await db.job.deleteMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, tenantId },
         }).then((r) => r.count);
         break;
 
       case "publish":
         updatedCount = await db.job.updateMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, tenantId },
           data: {
             status: "PUBLISHED",
             publishedAt: new Date(),
@@ -58,14 +62,14 @@ export async function POST(request: NextRequest) {
 
       case "close":
         updatedCount = await db.job.updateMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, tenantId },
           data: { status: "CLOSED" },
         }).then((r) => r.count);
         break;
 
       case "restore":
         updatedCount = await db.job.updateMany({
-          where: { id: { in: ids }, status: "ARCHIVED" },
+          where: { id: { in: ids }, tenantId, status: "ARCHIVED" },
           data: { status: "DRAFT" },
         }).then((r) => r.count);
         break;
@@ -83,10 +87,6 @@ export async function POST(request: NextRequest) {
       message: `${updatedCount} vaga(s) atualizada(s) com sucesso`,
     });
   } catch (error) {
-    console.error("Error in bulk action:", error);
-    return NextResponse.json(
-      { error: "Erro ao executar ação em lote" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

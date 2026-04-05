@@ -8,23 +8,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { evolutionService } from "@/lib/evolution-service";
+import { authErrorResponse } from "@/lib/auth-helper";
 
-// Helper to get effective tenant ID
-async function getEffectiveTenantId(session: { user?: { id?: string; tenantId?: string | null } }): Promise<string | null> {
+// Helper to get effective tenant ID - ONLY from session, no fallbacks
+async function getEffectiveTenantId(session: { user?: { id?: string; tenantId?: string | null } }): Promise<string> {
   if (session?.user?.tenantId) {
-    const tenant = await db.tenant.findUnique({ where: { id: session.user.tenantId } });
-    if (tenant) return tenant.id;
+    return session.user.tenantId;
   }
-
-  if (session?.user?.id) {
-    const membership = await db.tenantMember.findFirst({
-      where: { userId: session.user.id },
-    });
-    if (membership) return membership.tenantId;
-  }
-
-  const firstTenant = await db.tenant.findFirst();
-  return firstTenant?.id || null;
+  throw new Error("Organização não encontrada");
 }
 
 // Configure Evolution service
@@ -56,10 +47,6 @@ export async function POST(
     }
 
     const effectiveTenantId = await getEffectiveTenantId(session);
-
-    if (!effectiveTenantId) {
-      return NextResponse.json({ error: "Organização não encontrada" }, { status: 404 });
-    }
 
     const { action } = await params;
     const body = await request.json().catch(() => ({}));
@@ -246,10 +233,6 @@ export async function POST(
         return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
     }
   } catch (error) {
-    console.error("Error in WhatsApp action:", error);
-    return NextResponse.json({
-      error: "Erro ao executar ação",
-      details: error instanceof Error ? error.message : "Unknown error",
-    }, { status: 500 });
+    return authErrorResponse(error);
   }
 }

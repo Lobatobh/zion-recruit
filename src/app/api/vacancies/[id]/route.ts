@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 
 // GET /api/vacancies/[id]
 export async function GET(
@@ -14,6 +15,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
 
     if (!id) {
@@ -40,6 +43,11 @@ export async function GET(
     });
 
     if (!job) {
+      return NextResponse.json({ error: "Vaga não encontrada" }, { status: 404 });
+    }
+
+    // Verify tenant ownership
+    if (job.tenantId !== tenantId) {
       return NextResponse.json({ error: "Vaga não encontrada" }, { status: 404 });
     }
 
@@ -96,11 +104,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Error fetching vacancy:", error);
-    return NextResponse.json(
-      { error: "Erro ao buscar vaga" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
@@ -110,6 +114,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
 
     if (!id) {
@@ -122,6 +128,11 @@ export async function PUT(
     // Check if job exists
     const existing = await db.job.findUnique({ where: { id } });
     if (!existing) {
+      return NextResponse.json({ error: "Vaga não encontrada" }, { status: 404 });
+    }
+
+    // Verify tenant ownership
+    if (existing.tenantId !== tenantId) {
       return NextResponse.json({ error: "Vaga não encontrada" }, { status: 404 });
     }
 
@@ -168,11 +179,7 @@ export async function PUT(
 
     return NextResponse.json({ job });
   } catch (error) {
-    console.error("Error updating vacancy:", error);
-    return NextResponse.json(
-      { error: "Erro ao atualizar vaga" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
@@ -182,6 +189,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
 
     if (!id) {
@@ -195,15 +204,16 @@ export async function DELETE(
       return NextResponse.json({ error: "Vaga não encontrada" }, { status: 404 });
     }
 
+    // Verify tenant ownership
+    if (existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: "Vaga não encontrada" }, { status: 404 });
+    }
+
     await db.job.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting vacancy:", error);
-    return NextResponse.json(
-      { error: "Erro ao excluir vaga" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
