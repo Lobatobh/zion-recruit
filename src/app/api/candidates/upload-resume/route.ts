@@ -2,15 +2,16 @@
  * Resume Upload API - Zion Recruit
  * Server-side file upload endpoint for resume/CV files.
  * Accepts PDF, DOC, DOCX, TXT files via multipart/form-data.
- * Extracts text and optionally parses with AI.
+ * Extracts text and uploads to S3-compatible storage.
+ * Returns both the file URL and the extracted text.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
+import { getStorageService } from "@/lib/storage/storage-service";
 import path from "path";
 
-// Maximum file size: 5MB
+// Maximum file size: 5MB (resumes should be compact)
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 /**
@@ -129,16 +130,12 @@ async function extractTextFromFile(
 // POST /api/candidates/upload-resume
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.tenantId) {
-      return NextResponse.json(
-        { error: "Não autorizado" },
-        { status: 401 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const candidateId = formData.get("candidateId") as string | null;
 
     if (!file) {
       return NextResponse.json(
@@ -185,6 +182,61 @@ export async function POST(request: NextRequest) {
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
+    // Attempt to upload file to S3-compatible storage (non-blocking)
+    let storageResult: {
+      key: string;
+      url: string;
+      storedFileName: string;
+      uploaded: boolean;
+    } | null = null;
+
+    try {
+      const storage = getStorageService();
+      if (storage.isConfigured()) {
+        const result = await storage.upload(buffer, file.name, {
+          folder: 'resumes',
+          tenantId,
+          contentType: file.type || undefined,
+          isPublic: false,
+        });
+
+        if (result.success) {
+          storageResult = {
+            key: result.key,
+            url: result.url,
+            storedFileName: result.fileName,
+            uploaded: true,
+          };
+        } else {
+          console.warn('[ResumeUpload] Storage upload failed:', result.error);
+          // Continue without storage - text extraction still works
+          storageResult = {
+            key: '',
+            url: '',
+            storedFileName: file.name,
+            uploaded: false,
+          };
+        }
+      } else {
+        // Storage not configured - text-only mode
+        storageResult = {
+          key: '',
+          url: '',
+          storedFileName: file.name,
+          uploaded: false,
+        };
+      }
+    } catch (storageError) {
+      console.warn('[ResumeUpload] Storage upload error:', storageError);
+      // Degrade gracefully - continue with text-only result
+      storageResult = {
+        key: '',
+        url: '',
+        storedFileName: file.name,
+        uploaded: false,
+      };
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -193,14 +245,13 @@ export async function POST(request: NextRequest) {
         fileSize: file.size,
         fileType: fileExt,
         textLength: cleanedText.length,
+        // Storage fields (backward compatible - null if storage not configured)
+        fileKey: storageResult?.key || null,
+        fileUrl: storageResult?.url || null,
+        fileStored: storageResult?.uploaded || false,
       },
     });
   } catch (error) {
-    console.error("[ResumeUpload] Error:", error);
-    const message = error instanceof Error ? error.message : "Erro ao processar arquivo";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

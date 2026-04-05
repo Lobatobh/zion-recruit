@@ -8,6 +8,8 @@ const publicRoutes = [
   "/api/public",
   "/api/portal",
   "/api/billing/webhook",
+  "/api/whatsapp/webhook",
+  "/api/email/webhook",
   "/api/health",
   "/_next",
   "/favicon",

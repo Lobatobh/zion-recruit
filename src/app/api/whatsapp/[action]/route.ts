@@ -1,13 +1,16 @@
 /**
  * WhatsApp Action API - Zion Recruit
- * Handles WhatsApp actions: connect, disconnect, qrcode, send
+ * Handles WhatsApp actions: connect, disconnect, qrcode, send, check-number
+ * 
+ * Uses direct Evolution API calls for setup operations and
+ * the whatsapp/evolution-service for message sending.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { evolutionService } from "@/lib/evolution-service";
+import { getEvolutionService } from "@/lib/whatsapp/evolution-service";
 import { authErrorResponse } from "@/lib/auth-helper";
 
 // Helper to get effective tenant ID - ONLY from session, no fallbacks
@@ -18,20 +21,43 @@ async function getEffectiveTenantId(session: { user?: { id?: string; tenantId?: 
   throw new Error("Organização não encontrada");
 }
 
-// Configure Evolution service
-async function configureEvolution() {
+/**
+ * Check if Evolution API env vars are configured
+ */
+function isEvolutionConfigured(): boolean {
+  return !!(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY);
+}
+
+/**
+ * Direct Evolution API request helper (for setup/instance management)
+ */
+async function evolutionApiRequest<T>(
+  endpoint: string,
+  method: "GET" | "POST" | "DELETE" = "GET",
+  body?: unknown
+): Promise<T> {
   const baseUrl = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
 
-  if (baseUrl && apiKey) {
-    evolutionService.configure({
-      baseUrl,
-      apiKey,
-      instanceName: "zion-recruit",
-    });
-    return true;
+  if (!baseUrl || !apiKey) {
+    throw new Error("Evolution API não configurada");
   }
-  return false;
+
+  const response = await fetch(`${baseUrl}${endpoint}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      apikey: apiKey,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Evolution API error: ${error}`);
+  }
+
+  return response.json();
 }
 
 // POST /api/whatsapp/[action]
@@ -51,25 +77,27 @@ export async function POST(
     const { action } = await params;
     const body = await request.json().catch(() => ({}));
 
-    // Check if Evolution API is configured
-    const isConfigured = await configureEvolution();
-    
-    if (!isConfigured) {
-      return NextResponse.json({
-        error: "Evolution API não configurada",
-        hint: "Configure as variáveis de ambiente EVOLUTION_API_URL e EVOLUTION_API_KEY",
-      }, { status: 400 });
-    }
-
     switch (action) {
       case "connect": {
-        // Create or get existing instance
+        if (!isEvolutionConfigured()) {
+          return NextResponse.json({
+            error: "Evolution API não configurada",
+            hint: "Configure as variáveis de ambiente EVOLUTION_API_URL e EVOLUTION_API_KEY",
+          }, { status: 400 });
+        }
+
         const instanceName = `zion-recruit-${effectiveTenantId.slice(0, 8)}`;
-        
+
         try {
-          // Try to create instance
-          const instance = await evolutionService.createInstance(instanceName);
-          
+          // Create instance on Evolution API
+          const instance = await evolutionApiRequest<{
+            instance: { instanceName: string; instanceId: string; status: string };
+          }>("/instance/create", "POST", {
+            instanceName,
+            qrcode: true,
+            integration: "WHATSAPP-BAILEYS",
+          });
+
           // Save channel to database
           const channel = await db.messageChannel.upsert({
             where: {
@@ -94,7 +122,9 @@ export async function POST(
           });
 
           // Get QR code
-          const qrCode = await evolutionService.getQRCode(instanceName);
+          const qrCode = await evolutionApiRequest<{
+            qrcode: { base64: string };
+          }>(`/instance/qrcode/${instanceName}`);
 
           return NextResponse.json({
             success: true,
@@ -105,8 +135,10 @@ export async function POST(
         } catch (error) {
           // Instance might already exist, try to get QR code
           try {
-            const qrCode = await evolutionService.getQRCode(instanceName);
-            
+            const qrCode = await evolutionApiRequest<{
+              qrcode: { base64: string };
+            }>(`/instance/qrcode/${instanceName}`);
+
             return NextResponse.json({
               success: true,
               qrcode: qrCode.qrcode.base64,
@@ -130,8 +162,17 @@ export async function POST(
           return NextResponse.json({ error: "Canal não configurado" }, { status: 400 });
         }
 
-        await evolutionService.logout(channel.instanceName);
-        
+        // Try using the new service first (DB-backed credentials)
+        try {
+          const service = await getEvolutionService(effectiveTenantId);
+          await service.logout();
+        } catch {
+          // Fallback to direct API call
+          if (isEvolutionConfigured()) {
+            await evolutionApiRequest(`/instance/logout/${channel.instanceName}`, "DELETE");
+          }
+        }
+
         await db.messageChannel.update({
           where: { id: channel.id },
           data: { isActive: false },
@@ -141,6 +182,12 @@ export async function POST(
       }
 
       case "qrcode": {
+        if (!isEvolutionConfigured()) {
+          return NextResponse.json({
+            error: "Evolution API não configurada",
+          }, { status: 400 });
+        }
+
         const channel = await db.messageChannel.findFirst({
           where: {
             tenantId: effectiveTenantId,
@@ -149,10 +196,12 @@ export async function POST(
         });
 
         const instanceName = channel?.instanceName || `zion-recruit-${effectiveTenantId.slice(0, 8)}`;
-        
+
         try {
-          const qrCode = await evolutionService.getQRCode(instanceName);
-          
+          const qrCode = await evolutionApiRequest<{
+            qrcode: { base64: string };
+          }>(`/instance/qrcode/${instanceName}`);
+
           return NextResponse.json({
             success: true,
             qrcode: qrCode.qrcode.base64,
@@ -188,17 +237,27 @@ export async function POST(
           }, { status: 400 });
         }
 
-        const result = await evolutionService.sendTextMessage(
-          channel.instanceName,
-          phone,
-          message
-        );
+        // Use the new evolution service for sending (DB-backed)
+        try {
+          const service = await getEvolutionService(effectiveTenantId);
+          const result = await service.sendTextMessage(phone, message);
 
-        return NextResponse.json({
-          success: true,
-          messageId: result.key.id,
-          status: result.status,
-        });
+          if (!result.success) {
+            return NextResponse.json({
+              error: result.error || "Erro ao enviar mensagem",
+            }, { status: 500 });
+          }
+
+          return NextResponse.json({
+            success: true,
+            messageId: result.messageId,
+            status: "sent",
+          });
+        } catch (error) {
+          return NextResponse.json({
+            error: error instanceof Error ? error.message : "Erro ao enviar mensagem",
+          }, { status: 500 });
+        }
       }
 
       case "check-number": {
@@ -206,6 +265,10 @@ export async function POST(
 
         if (!phone) {
           return NextResponse.json({ error: "Phone é obrigatório" }, { status: 400 });
+        }
+
+        if (!isEvolutionConfigured()) {
+          return NextResponse.json({ error: "Evolution API não configurada" }, { status: 400 });
         }
 
         const channel = await db.messageChannel.findFirst({
@@ -220,13 +283,33 @@ export async function POST(
           return NextResponse.json({ error: "WhatsApp não está conectado" }, { status: 400 });
         }
 
-        const result = await evolutionService.checkNumber(channel.instanceName, phone);
+        // Direct API call for number check
+        const cleaned = phone.replace(/\D/g, "");
+        let formattedNumber = cleaned;
+        if (cleaned.length === 10 || cleaned.length === 11) {
+          formattedNumber = `55${cleaned}`;
+        }
 
-        return NextResponse.json({
-          success: true,
-          exists: result.exists,
-          jid: result.jid,
-        });
+        try {
+          const data = await evolutionApiRequest<
+            Array<{ number: string; exists: boolean; jid?: string }>
+          >(`/chat/whatsappNumbers/${channel.instanceName}`, "POST", {
+            numbers: [formattedNumber],
+          });
+
+          const result = data.find((r) => r.number === formattedNumber);
+
+          return NextResponse.json({
+            success: true,
+            exists: result?.exists || false,
+            jid: result?.jid,
+          });
+        } catch {
+          return NextResponse.json({
+            success: true,
+            exists: false,
+          });
+        }
       }
 
       default:

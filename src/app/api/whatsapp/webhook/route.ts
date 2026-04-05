@@ -1,14 +1,64 @@
 /**
  * WhatsApp Webhook API - Zion Recruit
  * Receive messages from Evolution API
+ * 
+ * Authentication:
+ * - If EVOLUTION_WEBHOOK_SECRET is set, verifies the 'x-evolution-signature' header
+ * - If INTERNAL_SERVICE_TOKEN is set, verifies the 'x-service-token' header
+ * - If neither is set, allows all requests (development mode)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+/**
+ * Verify webhook authentication
+ * Returns true if request is authenticated (or in development mode)
+ */
+function verifyWebhookAuth(request: NextRequest): boolean {
+  const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET;
+  const serviceToken = process.env.INTERNAL_SERVICE_TOKEN;
+
+  // Development mode - no auth configured
+  if (!webhookSecret && !serviceToken) {
+    console.log("[WhatsApp Webhook] No auth configured - development mode");
+    return true;
+  }
+
+  // Check service token header
+  if (serviceToken) {
+    const token = request.headers.get("x-service-token");
+    if (token === serviceToken) {
+      return true;
+    }
+  }
+
+  // Check evolution signature header
+  if (webhookSecret) {
+    const signature = request.headers.get("x-evolution-signature");
+    const apikey = request.headers.get("apikey");
+
+    // Accept either signature match or apikey match
+    if (signature === webhookSecret || apikey === webhookSecret) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // POST /api/whatsapp/webhook - Receive webhook events from Evolution API
 export async function POST(request: NextRequest) {
   try {
+    // Verify webhook authentication
+    if (!verifyWebhookAuth(request)) {
+      console.warn("[WhatsApp Webhook] Authentication failed");
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const { event, instance, data } = body;
@@ -127,7 +177,6 @@ async function handleMessage(data: unknown): Promise<NextResponse> {
   });
 
   // Trigger AI processing if enabled
-  // This would normally be done asynchronously
   try {
     await fetch(`${process.env.NEXTAUTH_URL}/api/messages/conversations/${conversation.id}/ai-process`, {
       method: "POST",
@@ -165,6 +214,14 @@ async function handleQRCodeUpdate(data: unknown): Promise<NextResponse> {
 
 // GET /api/whatsapp/webhook - Verify webhook (for Evolution API)
 export async function GET(request: NextRequest) {
+  // Verify authentication for GET as well
+  if (!verifyWebhookAuth(request)) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const challenge = searchParams.get("hub.challenge");
 
