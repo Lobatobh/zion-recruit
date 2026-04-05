@@ -4,7 +4,7 @@ bun install v1.3.10 (30e609e0)
 + @prisma/client@6.19.2
 + z-ai-web-dev-sdk@0.0.17
 
-2 packages installed [1.58s]
+2 packages installed [2.40s]
 [job-processor] Running bun run dev...
 $ bun --hot index.ts
 38 | var clientVersion = version;

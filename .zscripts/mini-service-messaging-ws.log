@@ -3,7 +3,7 @@ bun install v1.3.10 (30e609e0)
 
 + socket.io@4.8.3
 
-22 packages installed [88.00ms]
+22 packages installed [115.00ms]
 [messaging-ws] Running bun run dev...
 $ bun --hot index.ts
  Messaging WebSocket Service running on port 3004
