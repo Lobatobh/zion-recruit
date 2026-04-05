@@ -49,3 +49,14 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Database files
+*.db
+*.db-journal
+*.db-wal
+db/
+# Worklog
+worklog.md
+# Mini services logs
+.zscripts/*.log
+# Keepalive scripts
+keepalive-server.sh
