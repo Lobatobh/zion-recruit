@@ -312,17 +312,20 @@ export function InterviewsPage() {
   return (
     <div className="h-full flex flex-col p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Entrevistas</h1>
-          <p className="text-muted-foreground">
-            Gerencie todas as entrevistas agendadas
-          </p>
+      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 px-6 py-8 text-white rounded-b-2xl shadow-lg shadow-violet-500/20 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Video className="h-8 w-8" />
+            <div>
+              <h1 className="text-2xl font-bold">Entrevistas</h1>
+              <p className="text-white/80 text-sm">Gerencie todas as entrevistas agendadas</p>
+            </div>
+          </div>
+          <Button onClick={() => setNewInterviewOpen(true)} className="bg-white text-violet-700 hover:bg-white/90 font-medium">
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Entrevista
+          </Button>
         </div>
-        <Button onClick={() => setNewInterviewOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Entrevista
-        </Button>
       </div>
 
       {/* Stats Cards */}

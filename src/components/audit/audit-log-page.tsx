@@ -7,7 +7,7 @@ import { AuditLogTable } from './audit-log-table';
 import { AuditFilters } from './audit-filters';
 import { AuditStats } from './audit-stats';
 import { Button } from '@/components/ui/button';
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuditLog {
@@ -158,41 +158,47 @@ export function AuditLogPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Audit Logs</h1>
-          <p className="text-muted-foreground">
-            Track all actions and changes in your organization
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              fetchLogs();
-              fetchStats();
-            }}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExport('csv')}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExport('json')}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export JSON
-          </Button>
+      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 px-6 py-8 text-white rounded-b-2xl shadow-lg shadow-violet-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Shield className="h-8 w-8" />
+            <div>
+              <h1 className="text-2xl font-bold">Audit Logs</h1>
+              <p className="text-white/80 text-sm">Track all actions and changes in your organization</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchLogs();
+                fetchStats();
+              }}
+              className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('csv')}
+              className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('json')}
+              className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export JSON
+            </Button>
+          </div>
         </div>
       </div>
 

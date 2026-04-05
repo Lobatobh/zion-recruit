@@ -15,6 +15,7 @@ import {
   FileText,
   Target,
   Activity,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -254,17 +255,22 @@ export function OverviewContent() {
       animate="visible"
     >
       {/* Header */}
-      <motion.div variants={itemVariants} className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Visão Geral</h1>
-          <p className="text-muted-foreground mt-1">
-            Bem-vindo ao {data.tenant?.name || "Zion Recruit"}! Aqui está o resumo do seu recrutamento.
-          </p>
+      <motion.div variants={itemVariants} className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 px-6 py-8 text-white rounded-b-2xl shadow-lg shadow-violet-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <LayoutDashboard className="h-8 w-8" />
+            <div>
+              <h1 className="text-2xl font-bold">Visão Geral</h1>
+              <p className="text-white/80 text-sm">
+                Bem-vindo ao {data.tenant?.name || "Zion Recruit"}! Aqui está o resumo do seu recrutamento.
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" onClick={fetchOverview} disabled={isLoading} className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white">
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
         </div>
-        <Button variant="outline" onClick={fetchOverview} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Atualizar
-        </Button>
       </motion.div>
 
       {/* Stats Grid */}

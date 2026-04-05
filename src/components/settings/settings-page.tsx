@@ -10,6 +10,7 @@ import {
   Building2,
   Users,
   User,
+  Settings,
 } from "lucide-react";
 import { MemberRole } from "@prisma/client";
 
@@ -53,11 +54,14 @@ export function SettingsPage() {
   return (
     <div className="p-6 lg:p-8 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Configurações</h1>
-        <p className="text-muted-foreground mt-1">
-          Gerencie sua organização, equipe e preferências
-        </p>
+      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 px-6 py-8 text-white rounded-b-2xl shadow-lg shadow-violet-500/20">
+        <div className="flex items-center gap-3">
+          <Settings className="h-8 w-8" />
+          <div>
+            <h1 className="text-2xl font-bold">Configurações</h1>
+            <p className="text-white/80 text-sm">Gerencie sua organização, equipe e preferências</p>
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}

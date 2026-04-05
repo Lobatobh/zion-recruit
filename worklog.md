@@ -1782,3 +1782,26 @@ Stage Summary:
 - Bug: Soft-deleted (isActive=false) clients blocked creating new clients with same name/CNPJ
 - Fix: Added isActive: true filter to both slug and CNPJ uniqueness checks
 - Files changed: src/app/api/clients/route.ts
+---
+Task ID: ui-modernization-v2
+Agent: Main Agent
+Task: Re-apply UI modernization (violet/purple brand theme, grouped sidebar, gradient headers) that was lost from previous session
+
+Work Log:
+- Verified previous session's changes were NOT saved to disk (globals.css still default gray, app-page.tsx flat nav)
+- Updated globals.css: violet/purple brand theme (primary oklch violet), custom scrollbar, glass-card utility, brand-gradient variable
+- Redesigned sidebar in app-page.tsx: 6 grouped sections (Principal, Comunicação, Inteligência IA, Clientes, Análise, Configurações)
+- Added new ViewTypes: calendar, interviews, campaigns, referrals, templates
+- Updated collapsed sidebar with gradient icon buttons and separator dots
+- Updated mobile sidebar with same grouped navigation
+- Updated all logo instances (login, loading, error, sidebar, mobile) with violet gradient
+- Subagent updated 6 module files with gradient headers: settings, webhooks, audit, api-credentials, interviews, overview
+- docs-page.tsx skipped (no traditional header), client-management-page.tsx skipped (already has gradient)
+- Cleaned unused imports (Sparkles, Target, Bell)
+- Build passed, server restarted on PID 2344, keepalive active
+
+Stage Summary:
+- Brand theme: Violet primary (oklch 0.541 0.222 293.009) with purple/fuchsia gradients
+- Sidebar: 6 grouped sections with emoji labels, gradient active states, collapse toggle at bottom
+- Module headers: 6 files updated with from-violet-600 via-purple-600 to-fuchsia-600 gradient
+- All logos: Gradient violet/purple/fuchsia with shadow-violet-500/25

@@ -17,6 +17,7 @@ import {
   Settings,
   Menu,
   ChevronDown,
+  ChevronRight,
   LogOut,
   User,
   Bot,
@@ -29,6 +30,11 @@ import {
   Crosshair,
   BookOpen,
   AlertCircle,
+  Video,
+  CalendarDays,
+  FileText,
+  Megaphone,
+  Handshake,
 } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -94,7 +100,12 @@ type ViewType =
   | "portal-dashboard"
   | "portal-interviews"
   | "portal-messages"
-  | "portal-disc-test";
+  | "portal-disc-test"
+  | "calendar"
+  | "interviews"
+  | "campaigns"
+  | "referrals"
+  | "templates";
 
 interface SessionUser {
   id: string;
@@ -188,10 +199,10 @@ function LoginForm({ onLoginSuccess }: { onLoginSuccess: (user: SessionUser) => 
       <div className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-sm lg:w-96">
           <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-2xl shadow-lg">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white font-bold text-2xl shadow-lg shadow-violet-500/25">
               Z
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            <span className="text-2xl font-bold bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent">
               Zion Recruit
             </span>
           </div>
@@ -470,23 +481,72 @@ function DashboardContent({ user, onSignOut }: { user: SessionUser; onSignOut: (
     setMobileOpen(false);
   }, [navigate]);
 
-  const navigationItems: { name: string; view: ViewType; icon: React.ElementType }[] = [
-    { name: "Visão Geral", view: "overview", icon: HomeIcon },
-    { name: "Vagas", view: "jobs", icon: Briefcase },
-    { name: "Candidatos", view: "candidates", icon: Users },
-    { name: "Pipeline", view: "pipeline", icon: LayoutGrid },
-    { name: "Mensagens", view: "messages", icon: MessageCircle },
-    { name: "Hunter AI", view: "sourcing", icon: Crosshair },
-    { name: "Agentes IA", view: "agents", icon: Bot },
-    { name: "Analytics", view: "analytics", icon: BarChart3 },
-    { name: "Audit Logs", view: "audit", icon: FileSearch },
-    { name: "Testes DISC", view: "disc", icon: Brain },
-    { name: "APIs", view: "apis", icon: Key },
-    { name: "Webhooks", view: "webhooks", icon: Webhook },
-    { name: "Documentação", view: "docs", icon: BookOpen },
-    { name: "Empresas", view: "clients", icon: Building2 },
-    { name: "Configurações", view: "settings", icon: Settings },
+  type NavGroup = {
+    label: string;
+    emoji: string;
+    items: { name: string; view: ViewType; icon: React.ElementType }[];
+  };
+
+  const navigationGroups: NavGroup[] = [
+    {
+      label: "Principal",
+      emoji: "🏠",
+      items: [
+        { name: "Visão Geral", view: "overview", icon: HomeIcon },
+        { name: "Vagas", view: "jobs", icon: Briefcase },
+        { name: "Candidatos", view: "candidates", icon: Users },
+        { name: "Pipeline", view: "pipeline", icon: LayoutGrid },
+      ],
+    },
+    {
+      label: "Comunicação",
+      emoji: "💬",
+      items: [
+        { name: "Mensagens", view: "messages", icon: MessageCircle },
+        { name: "Calendário", view: "calendar", icon: CalendarDays },
+        { name: "Video Entrevistas", view: "interviews", icon: Video },
+      ],
+    },
+    {
+      label: "Inteligência IA",
+      emoji: "🤖",
+      items: [
+        { name: "Hunter AI", view: "sourcing", icon: Crosshair },
+        { name: "Agentes IA", view: "agents", icon: Bot },
+        { name: "Campanhas IA", view: "campaigns", icon: Megaphone },
+        { name: "Brain Test", view: "disc", icon: Brain },
+      ],
+    },
+    {
+      label: "Clientes",
+      emoji: "🏢",
+      items: [
+        { name: "Empresas", view: "clients", icon: Building2 },
+        { name: "Indicações", view: "referrals", icon: Handshake },
+        { name: "Templates", view: "templates", icon: FileText },
+      ],
+    },
+    {
+      label: "Análise",
+      emoji: "📊",
+      items: [
+        { name: "Analytics", view: "analytics", icon: BarChart3 },
+        { name: "Audit Logs", view: "audit", icon: FileSearch },
+      ],
+    },
+    {
+      label: "Configurações",
+      emoji: "⚙️",
+      items: [
+        { name: "APIs", view: "apis", icon: Key },
+        { name: "Webhooks", view: "webhooks", icon: Webhook },
+        { name: "Documentação", view: "docs", icon: BookOpen },
+        { name: "Configurações", view: "settings", icon: Settings },
+      ],
+    },
   ];
+
+  const flatNavItems = navigationGroups.flatMap(g => g.items);
 
   const getInitials = (name?: string | null) => {
     if (!name) return "U";
@@ -649,82 +709,149 @@ function DashboardContent({ user, onSignOut }: { user: SessionUser; onSignOut: (
       {/* Desktop Sidebar */}
       <motion.aside
         initial={false}
-        animate={{ width: sidebarCollapsed ? 64 : 240 }}
+        animate={{ width: sidebarCollapsed ? 72 : 260 }}
         transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="hidden lg:block relative"
+        className="hidden lg:flex flex-col relative h-full"
       >
-        <div className="flex h-full flex-col bg-sidebar border-r border-sidebar-border">
-          <div className={cn("flex h-16 items-center border-b border-sidebar-border px-4", sidebarCollapsed ? "justify-center" : "gap-3")}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
-              Z
-            </div>
-            {!sidebarCollapsed && (
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+        {/* Logo */}
+        <div className={cn(
+          "flex items-center h-16 border-b border-sidebar-border shrink-0",
+          sidebarCollapsed ? "justify-center px-3" : "gap-3 px-5"
+        )}>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white font-bold text-xl shadow-lg shadow-violet-500/25">
+            Z
+          </div>
+          {!sidebarCollapsed && (
+            <div className="flex flex-col">
+              <span className="text-lg font-bold bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent leading-tight">
                 Zion Recruit
               </span>
-            )}
-          </div>
-
-          <ScrollArea className="flex-1 py-4">
-            <nav className={cn("space-y-1 px-2", sidebarCollapsed && "flex flex-col items-center")}>
-              {navigationItems.map((item) => (
-                <button
-                  key={item.name}
-                  onClick={() => handleNavigate(item.view)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 w-full text-left",
-                    currentView === item.view
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5 flex-shrink-0" />
-                  {!sidebarCollapsed && <span>{item.name}</span>}
-                </button>
-              ))}
-            </nav>
-          </ScrollArea>
+              <span className="text-[10px] text-muted-foreground leading-tight">Recruitment Platform</span>
+            </div>
+          )}
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-[18px] -right-3 z-50 h-6 w-6 rounded-full border border-border bg-background shadow-sm hover:bg-accent"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        >
-          <ChevronDown className={cn("h-3 w-3 transition-transform", sidebarCollapsed && "rotate-180")} />
-        </Button>
+        {/* Navigation Groups */}
+        <ScrollArea className="flex-1 py-3">
+          <nav className={cn("space-y-1 px-3", sidebarCollapsed && "px-2 flex flex-col items-center")}>
+            {sidebarCollapsed ? (
+              /* Collapsed: show items as a flat icon list with separator dots */
+              flatNavItems.map((item, idx) => (
+                <div key={item.name} className="flex flex-col items-center">
+                  <button
+                    onClick={() => handleNavigate(item.view)}
+                    className={cn(
+                      "flex items-center justify-center rounded-xl h-10 w-10 text-sm transition-all duration-200",
+                      currentView === item.view
+                        ? "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                  </button>
+                  {navigationGroups.some((g, gi) => g.items.indexOf(item) === 0 && idx > 0) && (
+                    <div className="w-1 h-1 rounded-full bg-border my-1" />
+                  )}
+                </div>
+              ))
+            ) : (
+              /* Expanded: show grouped sections */
+              navigationGroups.map((group) => (
+                <div key={group.label} className="mb-2">
+                  <div className="flex items-center gap-2 px-3 py-1.5">
+                    <span className="text-xs">{group.emoji}</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      {group.label}
+                    </span>
+                  </div>
+                  {group.items.map((item) => (
+                    <button
+                      key={item.name}
+                      onClick={() => handleNavigate(item.view)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200 w-full text-left relative",
+                        currentView === item.view
+                          ? "bg-gradient-to-r from-violet-600/90 via-purple-600/90 to-fuchsia-600/90 text-white shadow-md shadow-violet-500/20"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      {currentView === item.view && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-white" />
+                      )}
+                      <item.icon className="h-[18px] w-[18px] flex-shrink-0" />
+                      <span>{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              ))
+            )}
+          </nav>
+        </ScrollArea>
+
+        {/* Collapse toggle at bottom */}
+        <div className="border-t border-sidebar-border p-3 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "w-full flex items-center gap-2 text-muted-foreground hover:text-foreground",
+              sidebarCollapsed && "justify-center px-2"
+            )}
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            <ChevronRight className={cn("h-4 w-4 transition-transform", !sidebarCollapsed && "rotate-180")} />
+            {!sidebarCollapsed && <span className="text-xs">Recolher</span>}
+          </Button>
+        </div>
       </motion.aside>
 
       {/* Mobile Sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="p-0 w-64">
+        <SheetContent side="left" className="p-0 w-72">
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation Menu</SheetTitle>
           </SheetHeader>
           <div className="flex h-full flex-col bg-sidebar">
-            <div className="flex h-16 items-center border-b border-sidebar-border px-4 gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
+            <div className="flex items-center h-16 border-b border-sidebar-border px-4 gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white font-bold text-lg shadow-lg shadow-violet-500/25">
                 Z
               </div>
-              <span className="font-bold">Zion Recruit</span>
+              <div className="flex flex-col">
+                <span className="font-bold text-sm bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent leading-tight">
+                  Zion Recruit
+                </span>
+                <span className="text-[10px] text-muted-foreground">Recruitment Platform</span>
+              </div>
             </div>
-            <ScrollArea className="flex-1 py-4">
+            <ScrollArea className="flex-1 py-3">
               <nav className="space-y-1 px-2">
-                {navigationItems.map((item) => (
-                  <button
-                    key={item.name}
-                    onClick={() => handleNavigate(item.view)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 w-full text-left",
-                      currentView === item.view
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    )}
-                  >
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
-                    <span>{item.name}</span>
-                  </button>
+                {navigationGroups.map((group) => (
+                  <div key={group.label} className="mb-3">
+                    <div className="flex items-center gap-2 px-3 py-1.5">
+                      <span className="text-xs">{group.emoji}</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                        {group.label}
+                      </span>
+                    </div>
+                    {group.items.map((item) => (
+                      <button
+                        key={item.name}
+                        onClick={() => handleNavigate(item.view)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200 w-full text-left relative",
+                          currentView === item.view
+                            ? "bg-gradient-to-r from-violet-600/90 via-purple-600/90 to-fuchsia-600/90 text-white shadow-md shadow-violet-500/20"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        )}
+                      >
+                        {currentView === item.view && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-white" />
+                        )}
+                        <item.icon className="h-[18px] w-[18px] flex-shrink-0" />
+                        <span>{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </nav>
             </ScrollArea>
@@ -744,10 +871,10 @@ function DashboardContent({ user, onSignOut }: { user: SessionUser; onSignOut: (
             </SheetTrigger>
           </Sheet>
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white font-bold text-sm shadow-lg shadow-violet-500/25">
               Z
             </div>
-            <span className="font-bold">Zion Recruit</span>
+            <span className="font-bold bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent">Zion Recruit</span>
           </div>
         </div>
 
@@ -997,10 +1124,10 @@ function PageContentInner() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center p-8">
-          <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-3xl shadow-lg mx-auto mb-6">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white font-bold text-3xl shadow-xl shadow-violet-500/30 mx-auto mb-6">
             Z
           </div>
-          <h1 className="text-2xl font-bold mb-2">Zion Recruit</h1>
+          <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent">Zion Recruit</h1>
           <p className="text-muted-foreground">Carregando...</p>
         </div>
       </div>
@@ -1053,10 +1180,10 @@ class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError:
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-8">
           <div className="text-center max-w-md">
-            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-3xl shadow-lg mx-auto mb-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white font-bold text-3xl shadow-xl shadow-violet-500/30 mx-auto mb-6">
               Z
             </div>
-            <h1 className="text-2xl font-bold mb-2">Zion Recruit</h1>
+            <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent">Zion Recruit</h1>
             <p className="text-muted-foreground mb-4">
               Ocorreu um erro inesperado. Tente recarregar a página.
             </p>

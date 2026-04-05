@@ -852,25 +852,25 @@ export function ApiCredentialsPage() {
   return (
     <div className="h-full flex flex-col p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Key className="h-7 w-7 text-primary" />
-            APIs e Credenciais
-          </h1>
-          <p className="text-muted-foreground">
-            Gerencie suas chaves de API, credenciais e monitore o uso
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchData}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Atualizar
-          </Button>
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Credencial
-          </Button>
+      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 px-6 py-8 text-white rounded-b-2xl shadow-lg shadow-violet-500/20 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Key className="h-8 w-8" />
+            <div>
+              <h1 className="text-2xl font-bold">APIs e Credenciais</h1>
+              <p className="text-white/80 text-sm">Gerencie suas chaves de API, credenciais e monitore o uso</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={fetchData} className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Atualizar
+            </Button>
+            <Button onClick={() => setShowAddDialog(true)} className="bg-white text-violet-700 hover:bg-white/90 font-medium">
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Credencial
+            </Button>
+          </div>
         </div>
       </div>
 
