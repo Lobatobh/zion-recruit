@@ -8,10 +8,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { CampaignStatus, CampaignSource } from "@prisma/client"
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 export const dynamic = "force-dynamic"
-
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8"
 
 function formatCampaign(campaign: Record<string, unknown>) {
   return campaign
@@ -23,6 +22,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
     const { id } = await params
 
     if (!id) {
@@ -30,7 +31,7 @@ export async function GET(
     }
 
     const campaign = await db.campaign.findFirst({
-      where: { id, tenantId: DEMO_TENANT_ID },
+      where: { id, tenantId },
       include: {
         job: {
           select: {
@@ -93,6 +94,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
     const { id } = await params
 
     if (!id) {
@@ -103,7 +106,7 @@ export async function PATCH(
 
     // Check if campaign exists and belongs to tenant
     const existing = await db.campaign.findFirst({
-      where: { id, tenantId: DEMO_TENANT_ID },
+      where: { id, tenantId },
     })
 
     if (!existing) {
@@ -270,6 +273,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
     const { id } = await params
 
     if (!id) {
@@ -278,7 +283,7 @@ export async function DELETE(
 
     // Check if campaign exists and belongs to tenant
     const existing = await db.campaign.findFirst({
-      where: { id, tenantId: DEMO_TENANT_ID },
+      where: { id, tenantId },
     })
 
     if (!existing) {

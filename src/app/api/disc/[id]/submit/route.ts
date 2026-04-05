@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { DISCStatus } from '@prisma/client';
+import { authErrorResponse } from '@/lib/auth-helper';
 import { 
   calculateDISCResult, 
   calculateGraphScores, 

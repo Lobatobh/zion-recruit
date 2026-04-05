@@ -4,24 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
 // GET /api/credentials/stats - Get usage statistics
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     // Get date range (current month)
     const now = new Date();
@@ -78,7 +68,6 @@ export async function GET(request: NextRequest) {
       periodEnd: now.toISOString(),
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
-    return NextResponse.json({ error: 'Failed to fetch statistics' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }

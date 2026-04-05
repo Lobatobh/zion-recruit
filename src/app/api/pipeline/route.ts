@@ -4,46 +4,25 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 import { DEFAULT_STAGES } from "@/types/pipeline";
 
 // GET /api/pipeline - Get all stages with candidates for organization
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // For demo mode, allow access without tenantId
-    const tenantId = session?.user?.tenantId;
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const { searchParams } = new URL(request.url);
     const jobId = searchParams.get("jobId");
     const search = searchParams.get("search");
     const minScore = searchParams.get("minScore");
 
-    // Get tenant - either from session or first available (demo mode)
-    let tenant = null;
-    if (tenantId) {
-      tenant = await db.tenant.findUnique({ where: { id: tenantId } });
-    } else {
-      tenant = await db.tenant.findFirst();
-    }
-
-    const effectiveTenantId = tenant?.id;
-
-    // If no tenant found, return empty pipeline
-    if (!effectiveTenantId) {
-      return NextResponse.json({
-        stages: [],
-        total: 0,
-      });
-    }
-
     // Get all pipeline stages for the organization
     let stages = await db.pipelineStage.findMany({
       where: {
-        tenantId: effectiveTenantId,
+        tenantId,
       },
       include: {
         _count: {
@@ -59,7 +38,7 @@ export async function GET(request: NextRequest) {
         DEFAULT_STAGES.map((stage) =>
           db.pipelineStage.create({
             data: {
-              tenantId: effectiveTenantId,
+              tenantId,
               name: stage.name,
               color: stage.color,
               order: stage.order,
@@ -198,36 +177,15 @@ export async function GET(request: NextRequest) {
       total: totalCandidates,
     });
   } catch (error) {
-    console.error("Error fetching pipeline:", error);
-    return NextResponse.json(
-      { error: "Erro ao carregar pipeline" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // POST /api/pipeline - Create new stage
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // For demo mode, allow access without tenantId
-    const tenantId = session?.user?.tenantId;
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenant = null;
-    if (tenantId) {
-      tenant = await db.tenant.findUnique({ where: { id: tenantId } });
-    } else {
-      tenant = await db.tenant.findFirst();
-    }
-
-    if (!tenant) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const { name, color } = body;
@@ -242,7 +200,7 @@ export async function POST(request: NextRequest) {
     // Check for duplicate name
     const existingStage = await db.pipelineStage.findFirst({
       where: {
-        tenantId: tenant.id,
+        tenantId,
         name: name.trim(),
       },
     });
@@ -257,7 +215,7 @@ export async function POST(request: NextRequest) {
     // Get max order
     const maxOrderStage = await db.pipelineStage.findFirst({
       where: {
-        tenantId: tenant.id,
+        tenantId,
       },
       orderBy: { order: "desc" },
       select: { order: true },
@@ -267,7 +225,7 @@ export async function POST(request: NextRequest) {
 
     const stage = await db.pipelineStage.create({
       data: {
-        tenantId: tenant.id,
+        tenantId,
         name: name.trim(),
         color: color || "#6B7280",
         order: nextOrder,
@@ -281,10 +239,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ stage }, { status: 201 });
   } catch (error) {
-    console.error("Error creating stage:", error);
-    return NextResponse.json(
-      { error: "Erro ao criar etapa" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

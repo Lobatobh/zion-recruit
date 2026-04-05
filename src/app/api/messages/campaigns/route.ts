@@ -7,20 +7,22 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { CampaignStatus, CampaignSource } from "@prisma/client"
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 export const dynamic = "force-dynamic"
-
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8"
 
 // GET /api/messages/campaigns
 export async function GET(request: NextRequest) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
     const source = searchParams.get("source")
 
     // Build where clause
-    const where: Record<string, unknown> = { tenantId: DEMO_TENANT_ID }
+    const where: Record<string, unknown> = { tenantId }
 
     if (status && Object.values(CampaignStatus).includes(status as CampaignStatus)) {
       where.status = status
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     // Aggregate stats across ALL campaigns for this tenant (not filtered)
     const allCampaigns = await db.campaign.findMany({
-      where: { tenantId: DEMO_TENANT_ID },
+      where: { tenantId },
       select: {
         status: true,
         sent: true,
@@ -110,6 +112,9 @@ export async function GET(request: NextRequest) {
 // POST /api/messages/campaigns
 export async function POST(request: NextRequest) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
+
     const body = await request.json()
 
     const {
@@ -143,7 +148,7 @@ export async function POST(request: NextRequest) {
 
     const campaign = await db.campaign.create({
       data: {
-        tenantId: DEMO_TENANT_ID,
+        tenantId,
         name: name.trim(),
         description: description?.trim() || null,
         jobId: jobId || null,

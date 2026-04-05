@@ -5,10 +5,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
 export const dynamic = "force-dynamic";
-
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -20,10 +19,12 @@ export async function GET(
   context: RouteContext
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await context.params;
 
     const automation = await db.automation.findFirst({
-      where: { id, tenantId: DEMO_TENANT_ID },
+      where: { id, tenantId },
     });
 
     if (!automation) {
@@ -49,10 +50,12 @@ export async function PATCH(
   context: RouteContext
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await context.params;
 
     const existing = await db.automation.findFirst({
-      where: { id, tenantId: DEMO_TENANT_ID },
+      where: { id, tenantId },
     });
 
     if (!existing) {
@@ -106,10 +109,12 @@ export async function DELETE(
   context: RouteContext
 ) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await context.params;
 
     const existing = await db.automation.findFirst({
-      where: { id, tenantId: DEMO_TENANT_ID },
+      where: { id, tenantId },
     });
 
     if (!existing) {

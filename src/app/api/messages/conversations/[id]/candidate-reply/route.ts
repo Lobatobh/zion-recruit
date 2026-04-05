@@ -11,15 +11,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 import {
   processCandidateMessage,
   sendAIMessage,
 } from "@/lib/ai-screening-service";
 import { SenderType, ContentType, ChannelType, MessageStatus } from "@prisma/client";
-
-const DEMO_TENANT_ID = "cmmxleln70000px3a43u36vum";
 
 interface CandidateReplyBody {
   message: string;
@@ -31,16 +28,10 @@ export async function POST(
 ) {
   try {
     // ── 1. Validate session ──────────────────────────────────────────
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.tenantId) {
-      return NextResponse.json(
-        { error: "Não autorizado" },
-        { status: 401 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const { id: conversationId } = await params;
-    const tenantId = session.user.tenantId as string;
 
     // ── 2. Parse & validate request body ─────────────────────────────
     const body: CandidateReplyBody = await request.json();

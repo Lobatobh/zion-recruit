@@ -6,10 +6,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { AutomationType, AutomationChannel } from "@prisma/client";
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
 export const dynamic = "force-dynamic";
-
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
 
 const DEFAULT_AUTOMATIONS = [
   {
@@ -76,13 +75,16 @@ const DEFAULT_AUTOMATIONS = [
 // POST /api/messages/automations/seed - Seed default automations
 export async function POST() {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const existingCount = await db.automation.count({
-      where: { tenantId: DEMO_TENANT_ID },
+      where: { tenantId },
     });
 
     if (existingCount > 0) {
       const automations = await db.automation.findMany({
-        where: { tenantId: DEMO_TENANT_ID },
+        where: { tenantId },
         orderBy: { type: "asc" },
       });
 
@@ -93,7 +95,7 @@ export async function POST() {
     for (const def of DEFAULT_AUTOMATIONS) {
       await db.automation.create({
         data: {
-          tenantId: DEMO_TENANT_ID,
+          tenantId,
           type: def.type,
           name: def.name,
           description: def.description,
@@ -108,7 +110,7 @@ export async function POST() {
     }
 
     const automations = await db.automation.findMany({
-      where: { tenantId: DEMO_TENANT_ID },
+      where: { tenantId },
       orderBy: { type: "asc" },
     });
 

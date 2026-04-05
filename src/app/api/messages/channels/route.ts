@@ -6,14 +6,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ChannelType } from "@prisma/client";
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
+export const dynamic = "force-dynamic";
 
 // GET /api/messages/channels - List channels
 export async function GET() {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const channels = await db.messageChannel.findMany({
-      where: { tenantId: DEMO_TENANT_ID },
+      where: { tenantId },
       orderBy: { createdAt: "asc" },
     });
 
@@ -30,6 +34,9 @@ export async function GET() {
 // POST /api/messages/channels - Create channel
 export async function POST(request: NextRequest) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const body = await request.json();
     const { type, name, config, instanceName, instanceId } = body;
 
@@ -43,7 +50,7 @@ export async function POST(request: NextRequest) {
     // Check if channel type already exists
     const existing = await db.messageChannel.findFirst({
       where: {
-        tenantId: DEMO_TENANT_ID,
+        tenantId,
         type: type as ChannelType,
       },
     });
@@ -57,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const channel = await db.messageChannel.create({
       data: {
-        tenantId: DEMO_TENANT_ID,
+        tenantId,
         type: type as ChannelType,
         name,
         config: config ? JSON.stringify(config) : null,

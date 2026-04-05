@@ -4,28 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 
 // POST /api/disc/send - Send DISC test to candidate
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const { candidateId, sendEmail = true, sendWhatsapp = false } = body;
@@ -130,10 +116,6 @@ export async function POST(request: NextRequest) {
       message: `Teste DISC enviado para ${candidate.name}`,
     });
   } catch (error) {
-    console.error("Error sending DISC test:", error);
-    return NextResponse.json(
-      { error: "Erro ao enviar teste DISC" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

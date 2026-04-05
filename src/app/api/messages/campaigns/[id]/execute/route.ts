@@ -9,10 +9,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { sendAIMessage } from "@/lib/ai-screening-service";
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 import ZAI from "z-ai-web-dev-sdk";
 import type {
   SenderType,
@@ -24,27 +23,11 @@ import type {
 
 export const dynamic = "force-dynamic";
 
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
 const CAMPAIGN_BATCH_SIZE = 10;
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Resolve tenant ID from session, falling back to the demo tenant.
- */
-async function resolveTenantId(): Promise<string> {
-  try {
-    const session = await getServerSession(authOptions);
-    if (session?.user?.tenantId) {
-      return session.user.tenantId;
-    }
-  } catch {
-    // Session resolution failed – fall through to demo tenant.
-  }
-  return DEMO_TENANT_ID;
-}
 
 /**
  * Fetch a campaign and verify it belongs to the given tenant.
@@ -538,7 +521,8 @@ export async function POST(
     }
 
     // Resolve tenant from session
-    const tenantId = await resolveTenantId();
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     // Dispatch based on URL path
     const pathname = request.nextUrl.pathname;

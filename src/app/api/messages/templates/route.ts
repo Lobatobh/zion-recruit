@@ -6,8 +6,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ChannelType } from "@prisma/client";
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
+export const dynamic = "force-dynamic";
 
 // Default templates
 const DEFAULT_TEMPLATES = [
@@ -84,8 +85,11 @@ Enquanto isso, se tiver outras dúvidas, pode me perguntar! 😊`,
 // GET /api/messages/templates - List templates
 export async function GET() {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     let templates = await db.messageTemplate.findMany({
-      where: { tenantId: DEMO_TENANT_ID },
+      where: { tenantId },
       orderBy: [{ category: "asc" }, { name: "asc" }],
     });
 
@@ -95,7 +99,7 @@ export async function GET() {
         DEFAULT_TEMPLATES.map((t) =>
           db.messageTemplate.create({
             data: {
-              tenantId: DEMO_TENANT_ID,
+              tenantId,
               trigger: t.trigger,
               name: t.name,
               category: t.category,
@@ -123,6 +127,9 @@ export async function GET() {
 // POST /api/messages/templates - Create template
 export async function POST(request: NextRequest) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const body = await request.json();
     const { name, trigger, category, subject, body: templateBody, channel, variables } = body;
 
@@ -135,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     const template = await db.messageTemplate.create({
       data: {
-        tenantId: DEMO_TENANT_ID,
+        tenantId,
         name,
         trigger,
         category: category || "custom",

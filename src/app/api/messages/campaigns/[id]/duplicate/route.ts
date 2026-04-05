@@ -11,10 +11,9 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 export const dynamic = "force-dynamic"
-
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8"
 
 // POST /api/messages/campaigns/[id]/duplicate
 export async function POST(
@@ -22,6 +21,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
     const { id } = await params
 
     if (!id) {
@@ -30,7 +31,7 @@ export async function POST(
 
     // Check if campaign exists and belongs to tenant
     const original = await db.campaign.findFirst({
-      where: { id, tenantId: DEMO_TENANT_ID },
+      where: { id, tenantId },
     })
 
     if (!original) {
@@ -42,7 +43,7 @@ export async function POST(
 
     const campaign = await db.campaign.create({
       data: {
-        tenantId: DEMO_TENANT_ID,
+        tenantId,
         name: `Cópia de ${original.name}`,
         description: original.description,
         jobId: original.jobId,

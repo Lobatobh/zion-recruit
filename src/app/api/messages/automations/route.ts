@@ -6,16 +6,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { AutomationType, AutomationChannel } from "@prisma/client";
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
 export const dynamic = "force-dynamic";
-
-const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
 
 // GET /api/messages/automations - List all automations with stats
 export async function GET() {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const automations = await db.automation.findMany({
-      where: { tenantId: DEMO_TENANT_ID },
+      where: { tenantId },
       orderBy: { type: "asc" },
     });
 
@@ -51,6 +53,9 @@ export async function GET() {
 // POST /api/messages/automations - Create automation
 export async function POST(request: NextRequest) {
   try {
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
+
     const body = await request.json();
     const {
       type,
@@ -73,7 +78,7 @@ export async function POST(request: NextRequest) {
     // Check if automation type already exists for tenant
     const existing = await db.automation.findFirst({
       where: {
-        tenantId: DEMO_TENANT_ID,
+        tenantId,
         type: type as AutomationType,
       },
     });
@@ -87,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     const automation = await db.automation.create({
       data: {
-        tenantId: DEMO_TENANT_ID,
+        tenantId,
         type: type as AutomationType,
         name,
         description: description || null,

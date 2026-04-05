@@ -3,18 +3,19 @@ import { db } from '@/lib/db'
 import { JobStatus, CandidateStatus } from '@prisma/client'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper'
 
 export async function GET() {
   try {
-    // Get the first tenant (demo mode)
-    const tenant = await db.tenant.findFirst()
+    const { user } = await requireAuth()
+    const tenantId = requireTenant(user)
+
+    // Get tenant info
+    const tenant = await db.tenant.findUnique({ where: { id: tenantId } })
 
     if (!tenant) {
-      // Return mock data if no tenant exists
       return NextResponse.json(getMockData())
     }
-
-    const tenantId = tenant.id
 
     // Get stats in parallel
     const [
@@ -126,8 +127,7 @@ export async function GET() {
 
     return NextResponse.json(overviewData)
   } catch (error) {
-    console.error('Overview API error:', error)
-    return NextResponse.json(getMockData())
+    return authErrorResponse(error)
   }
 }
 
