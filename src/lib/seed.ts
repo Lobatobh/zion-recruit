@@ -205,16 +205,13 @@ Estamos buscando um Desenvolvedor Full Stack apaixonado por tecnologia.
 
   for (const candidate of candidates) {
     const stage = stages[candidate.stageIndex];
-    await db.candidate.upsert({
-      where: {
-        tenantId_email_jobId: {
-          tenantId: tenant.id,
-          email: candidate.email,
-          jobId: job.id,
-        },
-      },
-      update: {},
-      create: {
+    const existing = await db.candidate.findFirst({
+      where: { tenantId: tenant.id, email: candidate.email },
+    });
+    if (existing) continue;
+
+    await db.candidate.create({
+      data: {
         tenantId: tenant.id,
         jobId: job.id,
         pipelineStageId: stage?.id,

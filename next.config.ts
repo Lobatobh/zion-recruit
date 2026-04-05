@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   serverExternalPackages: ["@prisma/client", "pdf-parse", "mammoth"],
+
+  // Standalone output for Docker / optimized deployments
+  output: "standalone",
+
   // Allow cross-origin requests from preview panel
   allowedDevOrigins: [
     "preview-chat-ab18b4b8-40ed-4c21-bd56-723559537414.space.z.ai",

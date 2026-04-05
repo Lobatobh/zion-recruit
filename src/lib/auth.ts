@@ -136,5 +136,5 @@ export const authOptions: NextAuthOptions = {
     },
   },
   secret: process.env.NEXTAUTH_SECRET || "zion-recruit-secret-key-change-in-production",
-  debug: true,
+  debug: process.env.NODE_ENV === "development",
 };
