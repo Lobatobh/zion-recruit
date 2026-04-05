@@ -52,6 +52,8 @@ model Tenant {
   clients          Client[]
   trackingEvents   TrackingEvent[]
   trackingNotifs   TrackingNotification[]
+  campaigns        Campaign[]
+  automations      Automation[]
 
   @@map("tenants")
 }
@@ -278,6 +280,7 @@ model Job {
   conversations       Conversation[]
   interviews          Interview[]
   trackingEvents      TrackingEvent[]
+  campaigns           Campaign[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status])
@@ -1439,6 +1442,136 @@ enum ApiAlertSeverity {
   WARNING
   ERROR
   CRITICAL
+}
+
+// ============================================
+// CAMPAIGNS (Outreach AI)
+// ============================================
+
+model Campaign {
+  id              String           @id @default(cuid())
+  tenantId        String
+  
+  // Campaign Info
+  name            String
+  description     String?
+  jobId           String?           // Optional link to job/vacancy
+  jobTitle        String?           // Denormalized for quick display
+  
+  // Status
+  status          CampaignStatus    @default(DRAFT)
+  
+  // Source channel
+  source          CampaignSource    @default(MULTI_CHANNEL)
+  
+  // AI Configuration
+  aiTone          String            @default("friendly")  // formal, friendly, casual
+  aiLanguage      String            @default("pt-BR")     // pt-BR, en, es
+  autoSchedule    Boolean           @default(false)
+  aiInstructions  String?           // Custom AI instructions
+  
+  // Initial message template
+  messageTemplate String?
+  
+  // Metrics
+  totalTarget     Int               @default(0)
+  sent            Int               @default(0)
+  delivered       Int               @default(0)
+  replied         Int               @default(0)
+  interested      Int               @default(0)
+  notInterested   Int               @default(0)
+  failed          Int               @default(0)
+  
+  // Timing
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job             Job?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("campaigns")
+}
+
+// ============================================
+// AUTOMATIONS (Communication)
+// ============================================
+
+model Automation {
+  id                String            @id @default(cuid())
+  tenantId          String
+  
+  // Automation Info
+  type              AutomationType
+  name              String
+  description       String?
+  
+  // Status
+  enabled           Boolean           @default(false)
+  
+  // Channel
+  channel           AutomationChannel @default(ALL)
+  
+  // Configuration (JSON)
+  config            String?           // JSON with type-specific config
+  
+  // AI Configuration
+  aiTone            String            @default("friendly")
+  aiLanguage        String            @default("pt-BR")
+  aiInstructions    String?           // Custom instructions for AI personality
+  
+  // Metrics
+  executionCount    Int               @default(0)
+  lastRunAt         DateTime?
+  lastError         String?
+  lastErrorAt       DateTime?
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type])
+  @@index([tenantId, enabled])
+  @@map("automations")
+}
+
+// ============================================
+// CAMPAIGN & AUTOMATION ENUMS
+// ============================================
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum CampaignSource {
+  LINKEDIN
+  EMAIL
+  WHATSAPP
+  MULTI_CHANNEL
+}
+
+enum AutomationType {
+  WHATSAPP_BOT
+  EMAIL_SEQUENCES
+  AI_SCREENING
+  AUTO_SCHEDULE
+  LEAD_NURTURING
+}
+
+enum AutomationChannel {
+  WHATSAPP
+  EMAIL
+  ALL
+  MULTI_CHANNEL
 }
 
 // ============================================

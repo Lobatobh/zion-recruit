@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ChannelType } from "@prisma/client";
 
-const DEMO_TENANT_ID = "cmmxleln70000px3a43u36vum";
+const DEMO_TENANT_ID = "cmn67w6by0000otpmwm26xoo8";
 
 // GET /api/messages/channels - List channels
 export async function GET() {
