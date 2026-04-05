@@ -2,17 +2,17 @@
 bun install v1.3.10 (30e609e0)
 No packages! Deleted empty lockfile
 
-[10.00ms] done
+[9.00ms] done
 [keepalive] Running bun run dev...
 $ bun --hot index.ts
-[2026-04-05T13:59:41.550Z] Keepalive service started on port 3001
-[2026-04-05T13:59:41.551Z] Pinging http://localhost:3000 every 10s
-[2026-04-05T13:59:41.561Z] Status endpoint: http://localhost:3001
-[2026-04-05T15:12:01.562Z] Server not responding
-[2026-04-05T15:12:11.562Z] Server not responding
-[2026-04-05T15:12:21.562Z] Server not responding
-[2026-04-05T15:12:31.562Z] Server not responding
-[2026-04-05T15:12:41.562Z] Server not responding
-[2026-04-05T15:12:51.562Z] Server not responding
-[2026-04-05T15:13:01.562Z] Server not responding
-[2026-04-05T15:13:11.562Z] Server not responding
+[2026-04-05T15:19:15.119Z] Keepalive service started on port 3001
+[2026-04-05T15:19:15.119Z] Pinging http://localhost:3000 every 10s
+46 |     }
+47 |   }
+48 |   let er;
+49 |   if (args.length > 0)
+50 |     er = args[0];
+51 |     throw er;
+                 ^
+error: Failed to start server. Is port 3001 in use?
+      at emitError (node:events:51:13)
