@@ -38,6 +38,9 @@ import {
   MoreVertical,
   ArrowUpDown,
   Loader2,
+  Check,
+  UserCheck,
+  X,
 } from "lucide-react";
 import { useMessagingStore } from "@/stores/messaging-store";
 import { useSession } from "next-auth/react";
@@ -67,6 +70,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -78,6 +82,9 @@ import {
 import { ConversationWithDetails } from "@/types/messaging";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 // ============================================
 // TYPES
@@ -194,6 +201,18 @@ function ConversationsTab({
     useState<ConversationWithDetails | null>(null);
   const [isMobileListOpen, setIsMobileListOpen] = useState(true);
 
+  // Auto-contact dialog state
+  const [isAutoContactOpen, setIsAutoContactOpen] = useState(false);
+  const [candidates, setCandidates] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  }>>([]);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+  const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
+  const [isAutoContacting, setIsAutoContacting] = useState(false);
+
   const handleSelectConversation = (conversation: ConversationWithDetails) => {
     setSelectedConversation(conversation);
     setIsMobileListOpen(false);
@@ -206,6 +225,78 @@ function ConversationsTab({
 
   const handleConversationCreated = () => {
     fetchConversations();
+  };
+
+  const handleOpenAutoContact = async () => {
+    setIsAutoContactOpen(true);
+    setIsLoadingCandidates(true);
+    setSelectedCandidateIds(new Set());
+    try {
+      const res = await fetch("/api/candidates?status=SOURCED&limit=50");
+      if (res.ok) {
+        const data = await res.json();
+        setCandidates((data.candidates || []).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+        })));
+      } else {
+        toast.error("Falha ao carregar candidatos");
+      }
+    } catch {
+      toast.error("Falha ao carregar candidatos");
+    } finally {
+      setIsLoadingCandidates(false);
+    }
+  };
+
+  const handleToggleCandidate = (candidateId: string) => {
+    setSelectedCandidateIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(candidateId)) {
+        next.delete(candidateId);
+      } else {
+        next.add(candidateId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCandidateIds.size === candidates.length) {
+      setSelectedCandidateIds(new Set());
+    } else {
+      setSelectedCandidateIds(new Set(candidates.map((c) => c.id)));
+    }
+  };
+
+  const handleAutoContact = async () => {
+    if (selectedCandidateIds.size === 0) {
+      toast.error("Selecione ao menos um candidato");
+      return;
+    }
+    setIsAutoContacting(true);
+    try {
+      const res = await fetch("/api/messages/auto-contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateIds: Array.from(selectedCandidateIds) }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      toast.success(`Contato IA iniciado! ${data.contacted || selectedCandidateIds.size} candidatos serão contactados.`);
+      setIsAutoContactOpen(false);
+      fetchConversations();
+    } catch {
+      toast.error("Falha ao iniciar contato IA");
+    } finally {
+      setIsAutoContacting(false);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
   return (
@@ -248,6 +339,14 @@ function ConversationsTab({
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => fetchConversations()}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white text-xs px-3"
+                onClick={handleOpenAutoContact}
+              >
+                <Bot className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Iniciar Contato IA</span>
+              </Button>
               <Button size="icon" className="h-8 w-8" onClick={onOpenCompose}>
                 <Plus className="h-4 w-4" />
               </Button>
@@ -286,6 +385,112 @@ function ConversationsTab({
       </div>
 
       <ComposeMessageDialog open={false} onOpenChange={onOpenCompose} onConversationCreated={handleConversationCreated} />
+
+      {/* Auto Contact Dialog */}
+      <Dialog open={isAutoContactOpen} onOpenChange={setIsAutoContactOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-violet-600" />
+              Iniciar Contato IA
+            </DialogTitle>
+            <DialogDescription>
+              Selecione os candidatos que a Zoe (IA) deverá contactar automaticamente
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingCandidates ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+            </div>
+          ) : candidates.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Nenhum candidato disponível</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Cadastre candidatos com status &quot;Sourced&quot; para iniciar
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Selection header */}
+              <div className="flex items-center justify-between px-1">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={handleSelectAll}>
+                  {selectedCandidateIds.size === candidates.length ? (
+                    <>
+                      <X className="h-3 w-3 mr-1" />
+                      Desmarcar todos
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3 w-3 mr-1" />
+                      Selecionar todos ({candidates.length})
+                    </>
+                  )}
+                </Button>
+                <Badge variant="secondary" className="text-xs">
+                  {selectedCandidateIds.size} selecionado{selectedCandidateIds.size !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+
+              {/* Candidate list */}
+              <ScrollArea className="max-h-72 rounded-md border">
+                <div className="p-2 space-y-1">
+                  {candidates.map((candidate) => (
+                    <label
+                      key={candidate.id}
+                      className={cn(
+                        "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors",
+                        selectedCandidateIds.has(candidate.id)
+                          ? "bg-violet-500/5 border border-violet-500/20"
+                          : "hover:bg-muted/50"
+                      )}
+                    >
+                      <Checkbox
+                        checked={selectedCandidateIds.has(candidate.id)}
+                        onCheckedChange={() => handleToggleCandidate(candidate.id)}
+                      />
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs bg-violet-500/10 text-violet-700">
+                          {getInitials(candidate.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{candidate.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{candidate.email}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </ScrollArea>
+
+              {/* Footer actions */}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setIsAutoContactOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white"
+                  onClick={handleAutoContact}
+                  disabled={isAutoContacting || selectedCandidateIds.size === 0}
+                >
+                  {isAutoContacting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Iniciando...
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Iniciar Contato ({selectedCandidateIds.size})
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

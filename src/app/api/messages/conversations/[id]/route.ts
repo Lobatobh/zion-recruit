@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { SenderType, ContentType, ChannelType, MessageStatus } from "@prisma/client";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(
   request: NextRequest,
@@ -65,8 +68,8 @@ export async function GET(
     return NextResponse.json({
       conversation: {
         ...conversation,
-        aiMode: conversation.aiMode === 1,
-        needsIntervention: conversation.needsIntervention === 1,
+        aiMode: conversation.aiMode,
+        needsIntervention: conversation.needsIntervention,
         messagesCount: conversation._count.messages,
         candidate: conversation.candidate,
         job: conversation.job,
@@ -108,9 +111,67 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (body.status !== undefined) updateData.status = body.status;
-    if (body.aiMode !== undefined) updateData.aiMode = body.aiMode ? 1 : 0;
+    if (body.aiMode !== undefined) updateData.aiMode = body.aiMode;
     if (body.aiStage !== undefined) updateData.aiStage = body.aiStage;
     if (body.notes !== undefined) updateData.collectedData = body.notes;
+
+    // Handle recruiter takeover via PATCH
+    if (body.takenOverBy && body.takenOverName) {
+      updateData.takenOverBy = body.takenOverBy;
+      updateData.takenOverAt = new Date();
+      updateData.takenOverName = body.takenOverName;
+      updateData.aiMode = false;
+
+      // Create system message for takeover
+      await db.message.create({
+        data: {
+          conversationId: id,
+          senderType: "SYSTEM" as SenderType,
+          senderName: "Sistema",
+          content: `🎯 ${body.takenOverName} assumiu a conversa`,
+          contentType: "TEXT" as ContentType,
+          channel: (conversation.channel || "CHAT") as ChannelType,
+          status: "SENT" as MessageStatus,
+        },
+      });
+
+      // Resolve any pending intervention
+      const pendingIntervention = await db.humanIntervention.findFirst({
+        where: { conversationId: id, resolvedAt: null },
+        orderBy: { triggeredAt: "desc" },
+      });
+      if (pendingIntervention) {
+        await db.humanIntervention.update({
+          where: { id: pendingIntervention.id },
+          data: {
+            resolvedAt: new Date(),
+            resolvedBy: body.takenOverBy,
+            resolutionNotes: `Assumida por ${body.takenOverName} via PATCH`,
+          },
+        });
+      }
+    }
+
+    // Handle release back to AI via PATCH
+    if (body.releaseToAI === true) {
+      updateData.takenOverBy = null;
+      updateData.takenOverAt = null;
+      updateData.takenOverName = null;
+      updateData.aiMode = true;
+
+      // Create system message for release
+      await db.message.create({
+        data: {
+          conversationId: id,
+          senderType: "SYSTEM" as SenderType,
+          senderName: "Sistema",
+          content: "🤖 IA Zoe reassumiu o controle da conversa",
+          contentType: "TEXT" as ContentType,
+          channel: (conversation.channel || "CHAT") as ChannelType,
+          status: "SENT" as MessageStatus,
+        },
+      });
+    }
 
     const updated = await db.conversation.update({
       where: { id },
@@ -120,8 +181,8 @@ export async function PATCH(
     return NextResponse.json({
       conversation: {
         ...updated,
-        aiMode: updated.aiMode === 1,
-        needsIntervention: updated.needsIntervention === 1,
+        aiMode: updated.aiMode,
+        needsIntervention: updated.needsIntervention,
       },
     });
   } catch (error) {

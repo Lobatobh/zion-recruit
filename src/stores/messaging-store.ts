@@ -27,6 +27,7 @@ interface MessageFilters {
   jobId?: string;
   search?: string;
   needsIntervention?: boolean;
+  aiActive?: boolean;
 }
 
 interface TypingIndicator {
@@ -232,6 +233,9 @@ export const useMessagingStore = create<MessagingState>((set, get) => ({
       if (filters.search) params.set("search", filters.search);
       if (filters.needsIntervention !== undefined) {
         params.set("needsIntervention", String(filters.needsIntervention));
+      }
+      if (filters.aiActive !== undefined) {
+        params.set("aiActive", String(filters.aiActive));
       }
 
       const response = await fetch(`/api/messages/conversations?${params.toString()}`);

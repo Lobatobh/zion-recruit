@@ -978,6 +978,9 @@ model Conversation {
   needsIntervention Boolean            @default(false)
   interventionReason String?
   collectedData     String?
+  takenOverBy       String?
+  takenOverAt       DateTime?
+  takenOverName     String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 

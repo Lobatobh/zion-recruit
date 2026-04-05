@@ -142,6 +142,9 @@ export interface ConversationWithDetails extends Conversation {
   job?: JobSummary;
   lastMessage?: Message;
   unreadCount: number;
+  takenOverBy?: string | null;
+  takenOverAt?: string | null;
+  takenOverName?: string | null;
 }
 
 // ============================================

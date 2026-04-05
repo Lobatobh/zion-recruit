@@ -19,6 +19,7 @@ import {
   AlertCircle,
   CheckCircle,
   MoreHorizontal,
+  Sparkles,
 } from "lucide-react";
 import { useMessagingStore } from "@/stores/messaging-store";
 import { Button } from "@/components/ui/button";
@@ -168,10 +169,30 @@ export function ConversationsList({
               setFilters({
                 ...filters,
                 needsIntervention: filters.needsIntervention ? undefined : true,
+                aiActive: undefined,
               })
             }
+            title="Precisa de intervenção"
           >
             <AlertCircle className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant={filters.aiActive ? "default" : "outline"}
+            size="icon"
+            onClick={() =>
+              setFilters({
+                ...filters,
+                aiActive: filters.aiActive ? undefined : true,
+                needsIntervention: undefined,
+              })
+            }
+            title="IA Ativas"
+            className={cn(
+              filters.aiActive && "bg-violet-600 hover:bg-violet-700"
+            )}
+          >
+            <Bot className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -261,11 +282,21 @@ export function ConversationsList({
                     </p>
 
                     {/* Indicators */}
-                    <div className="flex items-center gap-2 mt-2">
-                      {conversation.aiMode && (
-                        <Badge variant="outline" className="text-xs gap-1">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {conversation.takenOverBy ? (
+                        <Badge variant="outline" className="text-xs gap-1 border-emerald-500/50 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">
+                          <User className="h-3 w-3" />
+                          Assumida por {conversation.takenOverName || "Recrutador"}
+                        </Badge>
+                      ) : conversation.aiMode ? (
+                        <Badge variant="outline" className="text-xs gap-1 border-violet-500/50 text-violet-700 dark:text-violet-400 bg-violet-500/5">
                           <Bot className="h-3 w-3" />
                           IA Ativa
+                        </Badge>
+                      ) : !conversation.aiMode && conversation.takenOverBy && (
+                        <Badge variant="outline" className="text-xs gap-1 border-emerald-500/50 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">
+                          <User className="h-3 w-3" />
+                          Você no controle
                         </Badge>
                       )}
 

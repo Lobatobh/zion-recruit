@@ -261,16 +261,21 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
     if (!conversation || isTakingOver) return;
     setIsTakingOver(true);
     try {
-      // 1. Disable AI mode
-      await toggleAiMode(conversation.id, false);
-      // 2. Send a system message indicating takeover
-      await sendMessage({
-        conversationId: conversation.id,
-        content: "🎯 *Recrutador assumiu a conversa*",
-        contentType: "TEXT" as any,
-      }).catch(() => {});
+      const res = await fetch(`/api/messages/conversations/${conversation.id}/takeover`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      // Update conversation in store
+      const store = useMessagingStore.getState();
+      store.updateConversation(conversation.id, {
+        aiMode: false,
+        takenOverBy: data.conversation.takenOverBy,
+        takenOverAt: data.conversation.takenOverAt,
+        takenOverName: data.conversation.takenOverName,
+        needsIntervention: false,
+      });
       toast.success("Você assumiu a conversa! A IA está pausada.");
-    } catch (error) {
+      fetchMessages(conversation.id);
+    } catch {
       toast.error("Falha ao assumir conversa");
     } finally {
       setIsTakingOver(false);
@@ -280,9 +285,19 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
   const handleReactivateAI = async () => {
     if (!conversation) return;
     try {
-      await toggleAiMode(conversation.id, true);
+      const res = await fetch(`/api/messages/conversations/${conversation.id}/release`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const store = useMessagingStore.getState();
+      store.updateConversation(conversation.id, {
+        aiMode: true,
+        takenOverBy: null,
+        takenOverAt: null,
+        takenOverName: null,
+      });
       toast.success("IA reativada! A Zoe voltou a controlar a conversa.");
-    } catch (error) {
+      fetchMessages(conversation.id);
+    } catch {
       toast.error("Falha ao reativar IA");
     }
   };
@@ -432,6 +447,22 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
         month: "long",
       });
     }
+  };
+
+  const formatTimeAgo = (date: Date | string) => {
+    const now = new Date();
+    const d = new Date(date);
+    const diffMs = now.getTime() - d.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSecs < 60) return "agora";
+    if (diffMins < 60) return `há ${diffMins} minuto${diffMins > 1 ? "s" : ""}`;
+    if (diffHours < 24) return `há ${diffHours} hora${diffHours > 1 ? "s" : ""}`;
+    if (diffDays < 7) return `há ${diffDays} dia${diffDays > 1 ? "s" : ""}`;
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   };
 
   const conversationMessages = messages[conversation?.id || ""] || [];
@@ -631,7 +662,7 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
       </div>
 
       {/* AI Control Banner - Show when AI is driving the conversation */}
-      {conversation.aiMode && !conversation.needsIntervention && (
+      {conversation.aiMode && !conversation.takenOverBy && !conversation.needsIntervention && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -673,7 +704,7 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
       )}
 
       {/* Human Control Banner - Show when recruiter took over */}
-      {!conversation.aiMode && (
+      {!conversation.aiMode && conversation.takenOverBy && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -682,14 +713,17 @@ export function ChatView({ conversation, onBack, isMobile = false }: ChatViewPro
           <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 text-sm">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <User className="h-4 w-4 text-emerald-600" />
               </div>
               <div>
                 <span className="font-medium text-emerald-700 dark:text-emerald-400">
                   Você está no controle
                 </span>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  A IA está pausada. Você está respondendo diretamente.
+                  {conversation.takenOverAt
+                    ? `Você assumiu esta conversa em ${new Date(conversation.takenOverAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })} (${formatTimeAgo(conversation.takenOverAt)})`
+                    : "A IA está pausada. Você está respondendo diretamente."
+                  }
                 </p>
               </div>
             </div>
