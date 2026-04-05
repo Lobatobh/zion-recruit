@@ -6,9 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 import { encrypt } from '@/lib/encryption';
 import { llmService } from '@/lib/agents/base/LLMService';
 
@@ -18,14 +17,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
-
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
 
     const credential = await db.apiCredential.findFirst({
       where: { id, tenantId },
@@ -65,8 +59,7 @@ export async function GET(
 
     return NextResponse.json({ credential });
   } catch (error) {
-    console.error('Error fetching credential:', error);
-    return NextResponse.json({ error: 'Failed to fetch credential' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }
 
@@ -76,14 +69,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
-
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
 
     const body = await request.json();
     const {
@@ -164,8 +152,7 @@ export async function PUT(
 
     return NextResponse.json({ credential });
   } catch (error) {
-    console.error('Error updating credential:', error);
-    return NextResponse.json({ error: 'Failed to update credential' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }
 
@@ -175,14 +162,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
-
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
 
     const body = await request.json();
     const {
@@ -261,8 +243,7 @@ export async function PATCH(
 
     return NextResponse.json({ credential });
   } catch (error) {
-    console.error('Error updating credential:', error);
-    return NextResponse.json({ error: 'Failed to update credential' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }
 
@@ -272,14 +253,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     const { id } = await params;
-
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
 
     // Verify credential exists
     const existing = await db.apiCredential.findFirst({
@@ -310,7 +286,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting credential:', error);
-    return NextResponse.json({ error: 'Failed to delete credential' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }

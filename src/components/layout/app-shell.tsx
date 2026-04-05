@@ -24,8 +24,10 @@ import {
   Search,
   BookOpen,
 } from "lucide-react";
-import { useState, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useRouter } from "next/navigation";
+import { Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -175,6 +177,113 @@ function Sidebar({
   );
 }
 
+function TenantSwitcher() {
+  const { data: session, update: updateSession } = useSession();
+  const router = useRouter();
+  const [organizations, setOrganizations] = useState<Array<{
+    id: string;
+    name: string;
+    slug: string;
+    logo?: string | null;
+    role: string;
+    plan: string;
+  }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  // Fetch user's organizations on mount
+  useEffect(() => {
+    async function fetchOrgs() {
+      try {
+        const res = await fetch("/api/tenant");
+        if (res.ok) {
+          const data = await res.json();
+          setOrganizations(data.organizations || []);
+        }
+      } catch {
+        // Silently fail - user can still use current org
+      }
+    }
+    fetchOrgs();
+  }, []);
+
+  const handleSwitch = useCallback(async (tenantId: string) => {
+    if (tenantId === session?.user?.tenantId) return;
+
+    setSwitching(tenantId);
+    try {
+      const res = await fetch("/api/tenant/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId }),
+      });
+
+      if (res.ok) {
+        // Update NextAuth session with new tenant (no page reload needed)
+        await updateSession({ switchTenant: tenantId });
+      }
+    } catch {
+      // Error switching - do nothing
+    } finally {
+      setSwitching(null);
+    }
+  }, [session?.user?.tenantId, router, updateSession]);
+
+  const currentSlug = session?.user?.tenantSlug || "Sem Organização";
+  const currentOrgId = session?.user?.tenantId;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className="flex items-center gap-2 text-sm font-medium"
+        >
+          <Building2 className="h-4 w-4" />
+          <span className="hidden md:inline-block max-w-[160px] truncate">
+            {currentSlug}
+          </span>
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel>Organizações</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+
+        {/* Current organization */}
+        {organizations.map((org) => (
+          <DropdownMenuItem
+            key={org.id}
+            onClick={() => handleSwitch(org.id)}
+            disabled={switching !== null}
+            className="flex items-center justify-between cursor-pointer"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Building2 className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm truncate">{org.name}</span>
+                <span className="text-xs text-muted-foreground capitalize">{org.role.toLowerCase()}</span>
+              </div>
+            </div>
+            {org.id === currentOrgId && (
+              <Check className="h-4 w-4 text-primary flex-shrink-0" />
+            )}
+            {switching === org.id && (
+              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+            )}
+          </DropdownMenuItem>
+        ))}
+
+        {organizations.length === 0 && (
+          <DropdownMenuItem disabled>
+            <span className="text-sm text-muted-foreground">Nenhuma organização</span>
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function Header() {
   const { data: session } = useSession();
 
@@ -196,28 +305,7 @@ function Header() {
     <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
       <div className="flex items-center gap-4">
         {/* Organization Switcher */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 text-sm font-medium"
-            >
-              <Building2 className="h-4 w-4" />
-              <span className="hidden md:inline-block">
-                {session?.user?.tenantSlug || "Sem Organização"}
-              </span>
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel>Organizações</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Building2 className="mr-2 h-4 w-4" />
-              {session?.user?.tenantSlug || "Demo Organization"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <TenantSwitcher />
       </div>
 
       <div className="flex items-center gap-2">

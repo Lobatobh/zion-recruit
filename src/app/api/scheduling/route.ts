@@ -4,29 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 import { scheduleInterview, getAvailableSlots } from "@/lib/agents/specialized/SchedulerAgent";
 
 // GET /api/scheduling - Get available time slots
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const { searchParams } = new URL(request.url);
     const duration = parseInt(searchParams.get("duration") || "60");
@@ -40,32 +26,15 @@ export async function GET(request: NextRequest) {
       total: slots.length,
     });
   } catch (error) {
-    console.error("Error getting available slots:", error);
-    return NextResponse.json(
-      { error: "Erro ao buscar horários disponíveis" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // POST /api/scheduling - Schedule an interview
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const {
@@ -122,32 +91,15 @@ export async function POST(request: NextRequest) {
       inviteSent: result.data?.inviteSent,
     });
   } catch (error) {
-    console.error("Error scheduling interview:", error);
-    return NextResponse.json(
-      { error: "Erro ao agendar entrevista" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // PUT /api/scheduling - Reschedule an interview
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const { candidateId, newDate } = body;
@@ -185,10 +137,6 @@ export async function PUT(request: NextRequest) {
       newDate,
     });
   } catch (error) {
-    console.error("Error rescheduling interview:", error);
-    return NextResponse.json(
-      { error: "Erro ao remarcar entrevista" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

@@ -4,29 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 import { generateCandidateReport, generateBatchReports } from "@/lib/agents/specialized/ReportAgent";
 
 // GET /api/reports - Get report for a candidate
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const { searchParams } = new URL(request.url);
     const candidateId = searchParams.get("candidateId");
@@ -109,32 +95,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ report: result.data });
   } catch (error) {
-    console.error("Error generating report:", error);
-    return NextResponse.json(
-      { error: "Erro ao gerar relatório" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // POST /api/reports - Generate report with custom options
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const { candidateId, jobId, includeComparison, includeDISC, includeGeographic } = body;
@@ -178,10 +147,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ report: result.data });
   } catch (error) {
-    console.error("Error generating report:", error);
-    return NextResponse.json(
-      { error: "Erro ao gerar relatório" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

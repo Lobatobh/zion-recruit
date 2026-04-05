@@ -3,6 +3,17 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    email: string;
+    name?: string | null;
+    tenantId?: string | null;
+    tenantSlug?: string | null;
+    role?: string | null;
+  }
+}
+
 declare module "next-auth" {
   interface Session {
     user: {
@@ -15,19 +26,7 @@ declare module "next-auth" {
       role: string | null;
     };
   }
-
   interface User {
-    id: string;
-    email: string;
-    name?: string | null;
-    tenantId?: string | null;
-    tenantSlug?: string | null;
-    role?: string | null;
-  }
-}
-
-declare module "next-auth/jwt" {
-  interface JWT {
     id: string;
     email: string;
     name?: string | null;
@@ -114,7 +113,8 @@ export const authOptions: NextAuthOptions = {
     signIn: "/",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
+      // Initial sign in
       if (user) {
         token.id = user.id;
         token.email = user.email;
@@ -123,6 +123,30 @@ export const authOptions: NextAuthOptions = {
         token.tenantSlug = user.tenantSlug;
         token.role = user.role;
       }
+
+      // Handle session update (e.g., tenant switch)
+      if (trigger === "update" && session) {
+        // If switching tenant, update token with new tenant info
+        if (session.switchTenant) {
+          const { db } = await import("@/lib/db");
+          const membership = await db.tenantMember.findUnique({
+            where: {
+              tenantId_userId: {
+                tenantId: session.switchTenant as string,
+                userId: token.id as string,
+              },
+            },
+            include: { tenant: true },
+          });
+
+          if (membership) {
+            token.tenantId = membership.tenantId;
+            token.tenantSlug = membership.tenant.slug;
+            token.role = membership.role;
+          }
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {

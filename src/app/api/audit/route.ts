@@ -4,18 +4,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuditLogs, getAuditLogById } from '@/lib/audit';
-import { getServerSession } from 'next-auth';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get tenant ID from session (using email to look up membership)
-    const tenantId = (session.user as { tenantId?: string })?.tenantId || 'demo-tenant';
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
     
     const { searchParams } = new URL(request.url);
     
@@ -72,10 +66,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error fetching audit logs:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch audit logs' },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }

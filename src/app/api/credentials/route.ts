@@ -7,9 +7,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 import { ApiProvider } from '@prisma/client';
 import { encrypt, decrypt, checkEncryptionStatus } from '@/lib/encryption';
 import { llmService } from '@/lib/agents/base/LLMService';
@@ -23,18 +22,8 @@ if (!encryptionStatus.isConfigured) {
 // GET /api/credentials - List all credentials
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const { searchParams } = new URL(request.url);
     const provider = searchParams.get('provider');
@@ -87,26 +76,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ credentials });
   } catch (error) {
-    console.error('Error fetching credentials:', error);
-    return NextResponse.json({ error: 'Failed to fetch credentials' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }
 
 // POST /api/credentials - Create new credential
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const {
@@ -207,7 +185,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ credential }, { status: 201 });
   } catch (error) {
-    console.error('Error creating credential:', error);
-    return NextResponse.json({ error: 'Failed to create credential' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }

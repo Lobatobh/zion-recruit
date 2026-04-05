@@ -4,28 +4,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { requireAuth, requireTenant, authErrorResponse } from '@/lib/auth-helper';
 import { NotificationType, NotificationCategory, NotificationPriority } from '@prisma/client';
 
 // GET /api/notifications - List notifications
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant
-    let tenantId = session?.user?.tenantId;
-    const userId = session?.user?.id;
-
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
-    }
+    const { user, session } = await requireAuth();
+    const tenantId = requireTenant(user);
+    const userId = user.id;
 
     // Check if notification model exists in db
     if (!('notification' in db)) {
@@ -108,26 +96,15 @@ export async function GET(request: NextRequest) {
       hasMore: offset + limit < total,
     });
   } catch (error) {
-    console.error('Error fetching notifications:', error);
-    return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }
 
 // POST /api/notifications - Create notification
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     // Check if notification model exists in db
     if (!('notification' in db)) {
@@ -194,7 +171,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ notification }, { status: 201 });
   } catch (error) {
-    console.error('Error creating notification:', error);
-    return NextResponse.json({ error: 'Failed to create notification' }, { status: 500 });
+    return authErrorResponse(error);
   }
 }

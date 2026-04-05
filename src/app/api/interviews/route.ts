@@ -4,29 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 import { InterviewStatus, InterviewType } from "@prisma/client";
 
 // GET /api/interviews - List interviews
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") as InterviewStatus | null;
@@ -153,32 +139,15 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error fetching interviews:", error);
-    return NextResponse.json(
-      { error: "Erro ao buscar entrevistas" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // POST /api/interviews - Create a new interview
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const {
@@ -282,32 +251,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ interview }, { status: 201 });
   } catch (error) {
-    console.error("Error creating interview:", error);
-    return NextResponse.json(
-      { error: "Erro ao criar entrevista" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // PUT /api/interviews - Update an interview
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user, session } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const {
@@ -435,32 +387,15 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ interview });
   } catch (error) {
-    console.error("Error updating interview:", error);
-    return NextResponse.json(
-      { error: "Erro ao atualizar entrevista" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // DELETE /api/interviews - Delete an interview
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organização não encontrada" },
-        { status: 404 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
@@ -491,11 +426,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ message: "Entrevista excluída com sucesso" });
   } catch (error) {
-    console.error("Error deleting interview:", error);
-    return NextResponse.json(
-      { error: "Erro ao excluir entrevista" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 

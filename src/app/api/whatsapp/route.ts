@@ -4,30 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth, requireTenant, authErrorResponse } from "@/lib/auth-helper";
 import { getEvolutionService, sendCandidateNotificationMessage } from "@/lib/whatsapp/evolution-service";
 
 // GET /api/whatsapp - Get WhatsApp status
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({
-        configured: false,
-        status: "demo",
-        message: "WhatsApp integration running in demo mode",
-      });
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     // Check if credentials exist
     const credential = await db.apiCredential.findFirst({
@@ -63,32 +48,15 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Error getting WhatsApp status:", error);
-    return NextResponse.json(
-      { error: "Erro ao verificar status do WhatsApp" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
 
 // POST /api/whatsapp - Send WhatsApp message
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    // Get tenant - either from session or first available (demo mode)
-    let tenantId = session?.user?.tenantId;
-    if (!tenantId) {
-      const tenant = await db.tenant.findFirst();
-      tenantId = tenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Tenant não encontrado" },
-        { status: 400 }
-      );
-    }
+    const { user } = await requireAuth();
+    const tenantId = requireTenant(user);
 
     const body = await request.json();
     const { candidateId, message, type = 'status_update' } = body;
@@ -146,10 +114,6 @@ export async function POST(request: NextRequest) {
       sentTo: candidate.phone,
     });
   } catch (error) {
-    console.error("Error sending WhatsApp message:", error);
-    return NextResponse.json(
-      { error: "Erro ao enviar mensagem" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
