@@ -143,14 +143,14 @@ npx next build 2>&1
 log_step_end "Building Next.js for production"
 
 log_step_start "Starting Next.js production server (with auto-restart)"
-echo "[BUN] Starting production server with auto-restart loop..."
+echo "[BUN] Starting production server with auto-restart loop and keepalive..."
 (
   while true; do
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Next.js production server..."
-    NODE_OPTIONS="--max-old-space-size=512" npx next start -p 3000 2>&1
+    NODE_OPTIONS="--max-old-space-size=1024" node "$PROJECT_DIR/serve.js" 2>&1
     EXIT_CODE=$?
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server exited with code $EXIT_CODE. Restarting in 3s..."
-    sleep 3
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Server exited with code $EXIT_CODE. Restarting in 2s..."
+    sleep 2
   done
 ) > "$PROJECT_DIR/dev.log" 2>&1 &
 DEV_PID=$!
@@ -168,7 +168,20 @@ log_step_end "Health check"
 
 start_mini_services
 
-echo "Next.js dev server is running in background (PID: $DEV_PID) with auto-restart."
-echo "Use 'kill $DEV_PID' to stop it."
+log_step_start "Starting keepalive loop"
+echo "[BUN] Starting keepalive to prevent sandbox from killing server..."
+(
+  while true; do
+    sleep 2
+    curl -s -m 3 -o /dev/null http://localhost:3000/ 2>/dev/null || true
+  done
+) > /dev/null 2>&1 &
+KEEPALIVE_PID=$!
+disown "$KEEPALIVE_PID" 2>/dev/null || true
+log_step_end "Starting keepalive loop"
+
+echo "Next.js production server is running (PID: $DEV_PID) with auto-restart and keepalive."
+echo "Keepalive PID: $KEEPALIVE_PID"
 disown "$DEV_PID" 2>/dev/null || true
 unset DEV_PID
+unset KEEPALIVE_PID
